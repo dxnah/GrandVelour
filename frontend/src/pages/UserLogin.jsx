@@ -1,7 +1,5 @@
 import { useState } from "react";
 
-// ── Defined OUTSIDE UserLogin so React never remounts them on re-render ───────
-
 function TextField({ fieldKey, label, type, placeholder, value, onChange, onEnter }) {
   return (
     <div style={S.fieldWrap}>
