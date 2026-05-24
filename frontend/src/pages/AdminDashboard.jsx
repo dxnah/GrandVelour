@@ -21,7 +21,7 @@ export default function AdminDashboard({ navigate, onLogout }) {
   const [selectedHotelForClients, setSelectedHotelForClients] = useState(null);
   const [previewBooking, setPreviewBooking] = useState(null);
   const [receiptZoom, setReceiptZoom] = useState(1);
-  const [selectedClientIds, setSelectedClientIds] = useState([]);
+  const [, setSelectedClientIds] = useState([]);
   const [selectedBookingIds, setSelectedBookingIds] = useState([]);
 
   const token = sessionStorage.getItem("userToken") || localStorage.getItem("authToken");
@@ -125,6 +125,7 @@ export default function AdminDashboard({ navigate, onLogout }) {
     } catch (err) { alert("Network error."); }
   };
 
+  // eslint-disable-next-line no-unused-vars
   const bulkDel = async (type, ids, clearFn) => {
     if (!ids.length) return;
     if (!window.confirm(`Delete ${ids.length} selected record${ids.length > 1 ? "s" : ""}?`)) return;
