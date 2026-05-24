@@ -12,8 +12,14 @@ SECRET_KEY = 'django-insecure-g1#jg1h$_zm1e26+1emm8adspwhd0*2c5a8l7!!jj=2%v)hezh
 
 DEBUG = True
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.1.5']
 
+# ─── CORS ─────────────────────────────────────────────────────────────────────
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://192.168.1.5:3000",
+]
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -99,12 +105,7 @@ REST_FRAMEWORK = {
     ),
 }
 
-# ─── CORS ─────────────────────────────────────────────────────────────────────
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "http://10.219.242.135:8000",
-]
+
 
 # ─── Auth ─────────────────────────────────────────────────────────────────────
 AUTH_USER_MODEL = 'appointments.User'

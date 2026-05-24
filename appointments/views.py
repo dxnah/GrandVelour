@@ -104,7 +104,7 @@ class RoomDetail(generics.RetrieveUpdateDestroyAPIView):
 class ClientListCreate(generics.ListCreateAPIView):
     queryset = Client.objects.all()
     serializer_class = ClientSerializer
-    permission_classes = [IsStaffOrAdmin]
+    permission_classes = [AllowAny]
 
 class ClientDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = Client.objects.all()
@@ -125,7 +125,7 @@ class BookingListCreate(generics.ListCreateAPIView):
         return Booking.objects.filter(user=user)
 
     def perform_create(self, serializer):
-        booking = serializer.save(user=self.request.user)
+        booking = serializer.save()  # remove user=self.request.user
         if booking.status == 'confirmed':
             booking.room.is_available = False
             booking.room.save()
@@ -329,9 +329,9 @@ class UserLoginView(APIView):
 
         refresh = RefreshToken.for_user(user)
         return Response({
-            'refresh': tokens['refresh'],
-            'access': tokens['access'],
-            'role': user.role,           # ← ROLE included so frontend can redirect
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+            'role': user.role,
             'user': UserProfileSerializer(user).data,
         })
 

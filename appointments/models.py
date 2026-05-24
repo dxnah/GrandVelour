@@ -145,16 +145,3 @@ class Booking(models.Model):
 
     def __str__(self):
         return f"{self.client.name} - Room {self.room.room_number} ({self.check_in} to {self.check_out})"
-
-
-class Author(models.Model):
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='authors'
-    )
-    first_name = models.CharField(max_length=50)
-    last_name = models.CharField(max_length=50)
-
-    def __str__(self):
-        return f"{self.first_name} {self.last_name}"
