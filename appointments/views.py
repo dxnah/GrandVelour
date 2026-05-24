@@ -7,6 +7,7 @@ from django.utils.http import urlsafe_base64_decode
 from django.utils.encoding import force_str
 from django.contrib.auth.tokens import default_token_generator
 from datetime import date
+import os
 
 from .models import Hotel, Room, Client, Booking, User
 from .serializers import (
@@ -28,12 +29,10 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
 # ─── Custom Permissions ──────────────────────────────────────────────────────
 class IsAdminRole(BasePermission):
-    """Only Admin role can access."""
     def has_permission(self, request, view):
         return request.user.is_authenticated and request.user.role == 'admin'
 
 class IsStaffOrAdmin(BasePermission):
-    """Admin and Staff can access."""
     def has_permission(self, request, view):
         return request.user.is_authenticated and request.user.role in ['admin', 'staff']
 
@@ -51,13 +50,54 @@ def _jwt(user):
     }
 
 
+# ─── Chatbot ─────────────────────────────────────────────────────────────────
+CHATBOT_SYSTEM = """You are Velour, the elegant AI concierge of Grand Velour Hotels & Resorts — a luxury hotel brand in the Philippines. You assist guests with:
+
+- Room information (Single 1,500/night, Double 2,500/night, Suite 5,000/night, Deluxe 8,000/night)
+- Booking inquiries, check-in/check-out questions
+- Hotel amenities, facilities, and services
+- Floor map and navigation within the hotel
+- General hospitality assistance
+
+Personality: Warm, refined, elegant — like a world-class hotel concierge. Use graceful language. Keep responses concise (2-4 sentences max). Occasionally use light luxury vocabulary. Never break character. If asked something outside hotel topics, gently redirect to hotel services."""
+
+class ChatbotView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        messages = request.data.get('messages', [])
+        if not messages:
+            return Response({'error': 'No messages provided.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        api_key = os.getenv('ANTHROPIC_API_KEY')
+        if not api_key:
+            return Response({'error': 'Chatbot service unavailable.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        try:
+            import anthropic
+            client = anthropic.Anthropic(api_key=api_key)
+            response = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=1000,
+                system=CHATBOT_SYSTEM,
+                messages=messages,
+            )
+            reply = response.content[0].text
+            return Response({'reply': reply})
+        except Exception as e:
+            print(f"[CHATBOT ERROR] {e}")
+            return Response(
+                {'error': 'Chatbot temporarily unavailable. Please try again.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
 # ─── Hotel ───────────────────────────────────────────────────────────────────
 class HotelListCreate(generics.ListCreateAPIView):
     queryset = Hotel.objects.all()
     serializer_class = HotelSerializer
 
     def get_permissions(self):
-        # Only admin can create; anyone can view
         if self.request.method == 'POST':
             return [IsAdminRole()]
         return [AllowAny()]
@@ -77,7 +117,6 @@ class RoomListCreate(generics.ListCreateAPIView):
     serializer_class = RoomSerializer
 
     def get_permissions(self):
-        # Only admin/staff can create rooms; anyone can view
         if self.request.method == 'POST':
             return [IsStaffOrAdmin()]
         return [AllowAny()]
@@ -118,7 +157,6 @@ class BookingListCreate(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        # Admin and Staff can see ALL bookings; regular users see only their own
         if user.role in ['admin', 'staff']:
             return Booking.objects.all()
         return Booking.objects.filter(user=user)
@@ -168,7 +206,6 @@ class CancelBooking(APIView):
     def _get(self, pk, user):
         try:
             b = Booking.objects.get(pk=pk)
-            # Admin/Staff can cancel any booking; user can only cancel own
             if user.role not in ['admin', 'staff'] and b.user != user:
                 return None
             return b
@@ -214,13 +251,11 @@ class RescheduleBooking(APIView):
 
 # ─── Admin: Manage All Users ─────────────────────────────────────────────────
 class AdminUserListView(generics.ListAPIView):
-    """Admin only — view all users and change their roles."""
     queryset = User.objects.all()
     serializer_class = UserProfileSerializer
     permission_classes = [IsAdminRole]
 
 class AdminUserDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """Admin only — edit or delete a specific user."""
     queryset = User.objects.all()
     serializer_class = UserProfileSerializer
     permission_classes = [IsAdminRole]
@@ -231,9 +266,10 @@ class UserRegisterView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        print(f"[REGISTER REQUEST] {request.data}")  # ← debug: show what mobile sends
         serializer = UserRegistrationSerializer(data=request.data)
         if serializer.is_valid():
-            user = serializer.save()  # is_active=False set in serializer
+            user = serializer.save()
             try:
                 send_activation_email(user)
             except Exception as e:
@@ -242,6 +278,7 @@ class UserRegisterView(APIView):
                 {'message': 'Account created! Please check your email to activate your account.'},
                 status=status.HTTP_201_CREATED,
             )
+        print(f"[REGISTER ERROR] {serializer.errors}")  # ← debug: show validation errors
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -329,7 +366,7 @@ class UserLoginView(APIView):
         return Response({
             'refresh': tokens['refresh'],
             'access': tokens['access'],
-            'role': user.role,           # ← ROLE included so frontend can redirect
+            'role': user.role,
             'user': UserProfileSerializer(user).data,
         })
 

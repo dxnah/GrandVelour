@@ -30,6 +30,9 @@ urlpatterns = [
     path('user/resend-activation/',                 views.ResendActivationView.as_view(), name='resend-activation'),
 
     # ── Admin: Manage Users ───────────────────────────────────────────────────
-    path('admin/users/',         views.AdminUserListView.as_view()),
+    path('admin/users/',          views.AdminUserListView.as_view()),
     path('admin/users/<int:pk>/', views.AdminUserDetailView.as_view()),
+
+    # ── Chatbot ───────────────────────────────────────────────────────────────
+    path('chatbot/',              views.ChatbotView.as_view()),
 ]
