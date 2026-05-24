@@ -3,6 +3,7 @@ import LandingPage from "./pages/LandingPage";
 import BookAppointment from "./pages/BookAppointment";
 import ViewBookings from "./pages/ViewBookings";
 import AdminDashboard from "./pages/AdminDashboard";
+import StaffDashboard from "./pages/StaffDashboard";
 import AdminLogin from "./pages/AdminLogin";
 import RoomsPage from "./pages/RoomsPage";
 import AboutPage from "./pages/AboutPage";
@@ -13,38 +14,36 @@ import UserProfile from "./pages/UserProfile";
 import BookingLookup from "./pages/BookingLookup";
 import HotelDetail from "./pages/HotelDetail";
 import ContactPage from "./pages/ContactPage";
-import ActivatePage from "./pages/ActivatePage"; // ← NEW
+import ActivatePage from "./pages/ActivatePage";
+import ChatbotWidget from "./pages/ChatbotWidget"; // ← NEW
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState(
-    () => {
-      if (sessionStorage.getItem("isAdminAuthenticated") === "true") return "admin";
-      return sessionStorage.getItem("currentPage") || "landing";
-    }
-  );
-  const [previousPage, setPreviousPage] = useState("landing");
+  const [currentPage, setCurrentPage] = useState(() => {
+    const role = sessionStorage.getItem("userRole");
+    if (role === "admin") return "admindashboard";
+    if (role === "staff") return "staffdashboard";
+    if (sessionStorage.getItem("isAdminAuthenticated") === "true") return "admin";
+    return sessionStorage.getItem("currentPage") || "landing";
+  });
+
+  const [previousPage, setPreviousPage]               = useState("landing");
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(
     () => sessionStorage.getItem("isAdminAuthenticated") === "true"
   );
   const [isUserAuthenticated, setIsUserAuthenticated] = useState(
     () => !!sessionStorage.getItem("userToken")
   );
-  const [selectedFeature, setSelectedFeature] = useState(null);
-  const [scrollToFeatures, setScrollToFeatures] = useState(false);
-  const [selectedHotelId, setSelectedHotelId] = useState(null);
-  const [activateParams, setActivateParams] = useState(null); // ← NEW
+  const [selectedFeature, setSelectedFeature]         = useState(null);
+  const [scrollToFeatures, setScrollToFeatures]       = useState(false);
+  const [selectedHotelId, setSelectedHotelId]         = useState(null);
+  const [activateParams, setActivateParams]            = useState(null);
 
-  // ── NEW: On first load, check if the URL is /activate/:uid/:token/ ──────────
-  // When the user clicks the email link, the browser opens:
-  //   http://localhost:5173/activate/MQ/abc123token/
-  // This effect detects that path and switches to the activate page.
+  // ── Detect /activate/:uid/:token/ URL ─────────────────────────────────────
   useEffect(() => {
     const parts = window.location.pathname.split("/").filter(Boolean);
-    // parts = ["activate", "MQ", "abc123token"]
     if (parts[0] === "activate" && parts[1] && parts[2]) {
       setActivateParams({ uid: parts[1], token: parts[2] });
       setCurrentPage("activate");
-      // Clean the URL so refreshing doesn't re-trigger activation
       window.history.replaceState({}, "", "/");
     }
   }, []);
@@ -78,22 +77,35 @@ export default function App() {
   const handleAdminLogout = () => {
     sessionStorage.removeItem("isAdminAuthenticated");
     sessionStorage.removeItem("authToken");
+    sessionStorage.removeItem("userToken");
+    sessionStorage.removeItem("userData");
+    sessionStorage.removeItem("userRole");
+    sessionStorage.removeItem("currentPage");
     setIsAdminAuthenticated(false);
+    setIsUserAuthenticated(false);
     navigate("landing");
   };
 
   const handleUserLogout = () => {
     sessionStorage.removeItem("userToken");
     sessionStorage.removeItem("userData");
+    sessionStorage.removeItem("userRole");
     sessionStorage.removeItem("userUsername");
+    sessionStorage.removeItem("currentPage");
     setIsUserAuthenticated(false);
     navigate("landing");
   };
+
+  const userRole = sessionStorage.getItem("userRole");
+
+  // ── Hide chatbot on admin/staff dashboards ─────────────────────────────────
+  const showChatbot = !["admindashboard", "staffdashboard", "admin"].includes(currentPage);
 
   return (
     <div style={{ fontFamily: "'Cormorant Garamond', serif" }}>
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
 
+      {/* ── Landing ───────────────────────────────────────────────────────── */}
       {currentPage === "landing" && (
         <LandingPage
           navigate={navigate}
@@ -102,12 +114,16 @@ export default function App() {
           isUserAuthenticated={isUserAuthenticated}
         />
       )}
+
+      {/* ── Book / Bookings ───────────────────────────────────────────────── */}
       {currentPage === "book" && (
         <BookAppointment navigate={navigate} goBack={goBack} previousPage={previousPage} />
       )}
       {currentPage === "bookings" && (
         <ViewBookings navigate={navigate} goBack={goBack} previousPage={previousPage} />
       )}
+
+      {/* ── Admin via AdminLogin (legacy secret route) ────────────────────── */}
       {currentPage === "admin" && !isAdminAuthenticated && (
         <AdminLogin navigate={navigate} onLoginSuccess={() => {
           sessionStorage.setItem("isAdminAuthenticated", "true");
@@ -117,6 +133,18 @@ export default function App() {
       {currentPage === "admin" && isAdminAuthenticated && (
         <AdminDashboard navigate={navigate} onLogout={handleAdminLogout} />
       )}
+
+      {/* ── Admin Dashboard via UserLogin role='admin' ────────────────────── */}
+      {currentPage === "admindashboard" && userRole === "admin" && (
+        <AdminDashboard navigate={navigate} onLogout={handleAdminLogout} />
+      )}
+
+      {/* ── Staff Dashboard via UserLogin role='staff' ────────────────────── */}
+      {currentPage === "staffdashboard" && userRole === "staff" && (
+        <StaffDashboard navigate={navigate} onLogout={handleUserLogout} />
+      )}
+
+      {/* ── Rooms / About / Feature / FloorMap ───────────────────────────── */}
       {currentPage === "rooms" && (
         <RoomsPage navigate={navigate} goBack={goBack} />
       )}
@@ -129,6 +157,8 @@ export default function App() {
       {currentPage === "floormap" && (
         <FloorMapPage navigate={navigate} />
       )}
+
+      {/* ── User Auth ─────────────────────────────────────────────────────── */}
       {currentPage === "userlogin" && (
         <UserLogin
           navigate={navigate}
@@ -141,6 +171,8 @@ export default function App() {
           onLogout={handleUserLogout}
         />
       )}
+
+      {/* ── Lookup / Hotel Detail / Contact ──────────────────────────────── */}
       {currentPage === "lookup" && (
         <BookingLookup navigate={navigate} />
       )}
@@ -151,7 +183,7 @@ export default function App() {
         <ContactPage navigate={navigate} />
       )}
 
-      {/* ── NEW: Email activation page ───────────────────────────────────────── */}
+      {/* ── Email Activation ──────────────────────────────────────────────── */}
       {currentPage === "activate" && activateParams && (
         <ActivatePage
           navigate={navigate}
@@ -160,6 +192,9 @@ export default function App() {
           token={activateParams.token}
         />
       )}
+
+      {/* ── Chatbot — visible sa tanan pages except admin/staff dashboards ── */}
+      {showChatbot && <ChatbotWidget />}
     </div>
   );
 }

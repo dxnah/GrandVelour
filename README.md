@@ -1,4 +1,4 @@
 Admin credentials
 
-Username: MIKMIKADMIN
-Password: MIKMIK13
+Username: grandvelour@admin.com
+Password: adminpass

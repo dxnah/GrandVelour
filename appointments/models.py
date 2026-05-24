@@ -19,10 +19,17 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
         extra_fields.setdefault('is_active', True)
+        extra_fields.setdefault('role', 'admin')  # superusers are always admin
         return self.create_user(email, password, **extra_fields)
 
 
 class User(AbstractBaseUser, PermissionsMixin):
+    ROLE_CHOICES = [
+        ('admin', 'Admin'),
+        ('staff', 'Staff'),
+        ('user', 'User'),
+    ]
+
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=50)
     last_name = models.CharField(max_length=50)
@@ -30,6 +37,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     age = models.IntegerField(null=True, blank=True)
     birthday = models.DateField(null=True, blank=True)
     phone = models.CharField(max_length=20, blank=True)
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='user')  # ← NEW
     is_active = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
     date_joined = models.DateTimeField(default=timezone.now)
@@ -55,6 +63,14 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def get_full_name(self):
         return f"{self.first_name} {self.last_name}"
+
+    @property
+    def is_admin(self):
+        return self.role == 'admin'
+
+    @property
+    def is_hotel_staff(self):
+        return self.role in ['admin', 'staff']
 
 
 class Hotel(models.Model):
