@@ -15,6 +15,7 @@ import BookingLookup from "./pages/BookingLookup";
 import HotelDetail from "./pages/HotelDetail";
 import ContactPage from "./pages/ContactPage";
 import ActivatePage from "./pages/ActivatePage";
+import ChatbotWidget from "./pages/ChatbotWidget"; // ← NEW
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState(() => {
@@ -96,6 +97,9 @@ export default function App() {
   };
 
   const userRole = sessionStorage.getItem("userRole");
+
+  // ── Hide chatbot on admin/staff dashboards ─────────────────────────────────
+  const showChatbot = !["admindashboard", "staffdashboard", "admin"].includes(currentPage);
 
   return (
     <div style={{ fontFamily: "'Cormorant Garamond', serif" }}>
@@ -188,6 +192,9 @@ export default function App() {
           token={activateParams.token}
         />
       )}
+
+      {/* ── Chatbot — visible sa tanan pages except admin/staff dashboards ── */}
+      {showChatbot && <ChatbotWidget />}
     </div>
   );
 }
