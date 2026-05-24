@@ -1,17 +1,18 @@
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission
+from rest_framework.permissions import IsAuthenticated, BasePermission, AllowAny
 from django.contrib.auth import authenticate
+from django.conf import settings
 from django.utils.http import urlsafe_base64_decode
 from django.utils.encoding import force_str
 from django.contrib.auth.tokens import default_token_generator
 from datetime import date
-
 from .models import Hotel, Room, Client, Booking, User
 from .serializers import (
     HotelSerializer, RoomSerializer, ClientSerializer,
-    BookingSerializer, UserRegistrationSerializer, UserProfileSerializer,
+    BookingSerializer, UserRegistrationSerializer,
+    UserProfileSerializer,
 )
 from .email_utils import send_activation_email
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -26,7 +27,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
 
-# ─── helpers ────────────────────────────────────────────────────────────────
+# ─── helpers ──────────────────────────────────────────────────────────────────
 class IsBookingOwner(BasePermission):
     def has_object_permission(self, request, view, obj):
         return obj.user == request.user
@@ -36,7 +37,7 @@ def _jwt(user):
     return {'refresh': str(refresh), 'access': str(refresh.access_token)}
 
 
-# ─── Hotel ───────────────────────────────────────────────────────────────────
+# ─── Hotel ────────────────────────────────────────────────────────────────────
 class HotelListCreate(generics.ListCreateAPIView):
     queryset         = Hotel.objects.all()
     serializer_class = HotelSerializer
@@ -46,7 +47,7 @@ class HotelDetail(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = HotelSerializer
 
 
-# ─── Room ────────────────────────────────────────────────────────────────────
+# ─── Room ─────────────────────────────────────────────────────────────────────
 class RoomListCreate(generics.ListCreateAPIView):
     serializer_class = RoomSerializer
 
@@ -62,7 +63,7 @@ class RoomDetail(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = RoomSerializer
 
 
-# ─── Client ──────────────────────────────────────────────────────────────────
+# ─── Client ───────────────────────────────────────────────────────────────────
 class ClientListCreate(generics.ListCreateAPIView):
     queryset         = Client.objects.all()
     serializer_class = ClientSerializer
@@ -72,9 +73,9 @@ class ClientDetail(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ClientSerializer
 
 
-# ─── Booking ─────────────────────────────────────────────────────────────────
+# ─── Booking ──────────────────────────────────────────────────────────────────
 class BookingListCreate(generics.ListCreateAPIView):
-    serializer_class  = BookingSerializer
+    serializer_class   = BookingSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
@@ -87,7 +88,7 @@ class BookingListCreate(generics.ListCreateAPIView):
             booking.room.save()
 
 class BookingDetail(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class  = BookingSerializer
+    serializer_class   = BookingSerializer
     permission_classes = [IsAuthenticated, IsBookingOwner]
 
     def get_queryset(self):
@@ -100,6 +101,7 @@ class BookingDetail(generics.RetrieveUpdateDestroyAPIView):
 
 class MyBookings(APIView):
     permission_classes = [IsAuthenticated]
+
     def get(self, request):
         return Response(BookingSerializer(Booking.objects.filter(user=request.user), many=True).data)
 
@@ -150,32 +152,29 @@ class RescheduleBooking(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-# ─── User: Register ──────────────────────────────────────────────────────────
+# ─── User Registration ────────────────────────────────────────────────────────
 class UserRegisterView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
         serializer = UserRegistrationSerializer(data=request.data)
         if serializer.is_valid():
-            user = serializer.save()          # is_active=False set in serializer
+            user = serializer.save()
+
             try:
                 send_activation_email(user)
             except Exception as e:
-                print(f"[EMAIL ERROR] {e}")   # don't block registration
+                print(f'[Email Error] Could not send activation email to {user.email}: {e}')
+
             return Response(
-                {'message': 'Account created! Please check your email to activate your account.'},
-                status=status.HTTP_201_CREATED,
+                {'message': 'Registration successful. Please check your email to activate your account.'},
+                status=status.HTTP_201_CREATED
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-# ─── User: Activate ──────────────────────────────────────────────────────────
+# ─── Email Activation ─────────────────────────────────────────────────────────
 class ActivateAccountView(APIView):
-    """
-    GET /api/v1/user/activate/<uidb64>/<token>/
-    Called by the React /activate/:uid/:token page.
-    On success returns JWT so React can auto-login the user.
-    """
     permission_classes = [AllowAny]
 
     def get(self, request, uidb64, token):
@@ -186,7 +185,7 @@ class ActivateAccountView(APIView):
             return Response({'error': 'Invalid activation link.'}, status=status.HTTP_400_BAD_REQUEST)
 
         if user.is_active:
-            return Response({'message': 'Account already active. You can log in.'})
+            return Response({'message': 'Account is already activated.'}, status=status.HTTP_200_OK)
 
         if not default_token_generator.check_token(user, token):
             return Response({'error': 'Activation link is invalid or has expired.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -196,13 +195,13 @@ class ActivateAccountView(APIView):
 
         tokens = _jwt(user)
         return Response({
-            'message': 'Account activated successfully!',
+            'message': 'Account activated successfully! You can now log in.',
             'tokens':  tokens,
             'user':    UserProfileSerializer(user).data,
-        })
+        }, status=status.HTTP_200_OK)
 
 
-# ─── User: Resend Activation ─────────────────────────────────────────────────
+# ─── Resend Activation Email ──────────────────────────────────────────────────
 class ResendActivationView(APIView):
     permission_classes = [AllowAny]
 
@@ -210,25 +209,25 @@ class ResendActivationView(APIView):
         email = request.data.get('email', '').strip()
         if not email:
             return Response({'error': 'Email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
-            # Generic response — don't reveal if email exists
-            return Response({'message': 'If that email is registered, a new link has been sent.'})
+            return Response({'message': 'If that email is registered, an activation link has been sent.'}, status=status.HTTP_200_OK)
 
         if user.is_active:
-            return Response({'message': 'This account is already active. You can log in.'})
+            return Response({'error': 'This account is already activated.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             send_activation_email(user)
         except Exception as e:
-            print(f"[EMAIL ERROR] {e}")
-            return Response({'error': 'Failed to send email. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            print(f'[Email Error] Could not resend activation email to {user.email}: {e}')
+            return Response({'error': 'Failed to send email. Please try again later.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        return Response({'message': 'A new activation link has been sent to your email.'})
+        return Response({'message': 'Activation email resent. Please check your inbox.'}, status=status.HTTP_200_OK)
 
 
-# ─── User: Login ─────────────────────────────────────────────────────────────
+# ─── User Login ───────────────────────────────────────────────────────────────
 class UserLoginView(APIView):
     permission_classes = [AllowAny]
 
@@ -237,11 +236,10 @@ class UserLoginView(APIView):
         password = request.data.get('password', '')
 
         try:
-            user_obj = User.objects.get(email=email)
+            User.objects.get(email=email)
         except User.DoesNotExist:
             return Response({'error': 'Invalid email or password.'}, status=status.HTTP_401_UNAUTHORIZED)
 
-        # authenticate() uses USERNAME_FIELD='email', so pass email as username
         user = authenticate(request, username=email, password=password)
 
         if user is None:
@@ -249,20 +247,22 @@ class UserLoginView(APIView):
 
         if not user.is_active:
             return Response(
-                {'error': 'Account not activated. Please check your email for the activation link.',
-                 'not_activated': True},          # ← flag so React can show Resend button
-                status=status.HTTP_403_FORBIDDEN,
+                {
+                    'error': 'Account is not activated. Please check your email for the activation link.',
+                    'not_activated': True,
+                },
+                status=status.HTTP_403_FORBIDDEN
             )
 
-        tokens = _jwt(user)
+        refresh = RefreshToken.for_user(user)
         return Response({
-            'refresh': tokens['refresh'],
-            'access':  tokens['access'],
-            'user':    UserProfileSerializer(user).data,
-        })
+            'refresh': str(refresh),
+            'access':  str(refresh.access_token),
+            'user':    UserProfileSerializer(user).data
+        }, status=status.HTTP_200_OK)
 
 
-# ─── User: Profile ───────────────────────────────────────────────────────────
+# ─── User Profile ─────────────────────────────────────────────────────────────
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
