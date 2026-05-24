@@ -48,19 +48,16 @@ export default function ChatbotWidget() {
     setLoading(true);
 
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("http://127.0.0.1:8000/api/v1/chatbot/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          system: SYSTEM_PROMPT,
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
         }),
       });
 
       const data = await res.json();
-      const reply = data.content?.[0]?.text || "I apologize, I'm having trouble responding. Please try again.";
+      const reply = data.reply || "I apologize, I'm having trouble responding. Please try again.";
       setMessages(prev => [...prev, { role: "assistant", content: reply }]);
     } catch {
       setMessages(prev => [...prev, {

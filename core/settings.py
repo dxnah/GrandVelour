@@ -105,6 +105,13 @@ REST_FRAMEWORK = {
     ),
 }
 
+# --- CORS ---
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://192.168.0.104:8000",  # ← imong IP
+    "http://192.168.0.104:3000",  # ← frontend
+]
 
 
 # ─── Auth ─────────────────────────────────────────────────────────────────────
