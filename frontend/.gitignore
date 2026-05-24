@@ -21,3 +21,14 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Python / Django
+venv/
+venv_backup/
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+db.sqlite3
+*.sqlite3
+migrations/__pycache__/

@@ -18,7 +18,7 @@ export default function StaffDashboard({ navigate, onLogout }) {
   const [selectedHotelForRooms, setSelectedHotelForRooms] = useState(null);
   const [previewBooking, setPreviewBooking] = useState(null);
   const [receiptZoom, setReceiptZoom] = useState(1);
-  const [selectedBookingIds, setSelectedBookingIds] = useState([]);
+  const [, setSelectedBookingIds] = useState([]);
 
   const staffUser = JSON.parse(sessionStorage.getItem("userData") || "{}");
 
