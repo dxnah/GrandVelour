@@ -3,6 +3,7 @@ import LandingPage from "./pages/LandingPage";
 import BookAppointment from "./pages/BookAppointment";
 import ViewBookings from "./pages/ViewBookings";
 import AdminDashboard from "./pages/AdminDashboard";
+import StaffDashboard from "./pages/StaffDashboard";
 import AdminLogin from "./pages/AdminLogin";
 import RoomsPage from "./pages/RoomsPage";
 import AboutPage from "./pages/AboutPage";
@@ -24,19 +25,19 @@ export default function App() {
     return sessionStorage.getItem("currentPage") || "landing";
   });
 
-  const [previousPage, setPreviousPage]           = useState("landing");
+  const [previousPage, setPreviousPage]               = useState("landing");
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(
     () => sessionStorage.getItem("isAdminAuthenticated") === "true"
   );
   const [isUserAuthenticated, setIsUserAuthenticated] = useState(
     () => !!sessionStorage.getItem("userToken")
   );
-  const [selectedFeature, setSelectedFeature]     = useState(null);
-  const [scrollToFeatures, setScrollToFeatures]   = useState(false);
-  const [selectedHotelId, setSelectedHotelId]     = useState(null);
-  const [activateParams, setActivateParams]        = useState(null);
+  const [selectedFeature, setSelectedFeature]         = useState(null);
+  const [scrollToFeatures, setScrollToFeatures]       = useState(false);
+  const [selectedHotelId, setSelectedHotelId]         = useState(null);
+  const [activateParams, setActivateParams]            = useState(null);
 
-  // ── Detect /activate/:uid/:token/ URL ───────────────────────────────────────
+  // ── Detect /activate/:uid/:token/ URL ─────────────────────────────────────
   useEffect(() => {
     const parts = window.location.pathname.split("/").filter(Boolean);
     if (parts[0] === "activate" && parts[1] && parts[2]) {
@@ -78,6 +79,7 @@ export default function App() {
     sessionStorage.removeItem("userToken");
     sessionStorage.removeItem("userData");
     sessionStorage.removeItem("userRole");
+    sessionStorage.removeItem("currentPage");
     setIsAdminAuthenticated(false);
     setIsUserAuthenticated(false);
     navigate("landing");
@@ -93,13 +95,13 @@ export default function App() {
     navigate("landing");
   };
 
-  // ── Get current role ────────────────────────────────────────────────────────
   const userRole = sessionStorage.getItem("userRole");
 
   return (
     <div style={{ fontFamily: "'Cormorant Garamond', serif" }}>
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
 
+      {/* ── Landing ───────────────────────────────────────────────────────── */}
       {currentPage === "landing" && (
         <LandingPage
           navigate={navigate}
@@ -108,6 +110,8 @@ export default function App() {
           isUserAuthenticated={isUserAuthenticated}
         />
       )}
+
+      {/* ── Book / Bookings ───────────────────────────────────────────────── */}
       {currentPage === "book" && (
         <BookAppointment navigate={navigate} goBack={goBack} previousPage={previousPage} />
       )}
@@ -115,7 +119,7 @@ export default function App() {
         <ViewBookings navigate={navigate} goBack={goBack} previousPage={previousPage} />
       )}
 
-      {/* ── Admin via AdminLogin (legacy) ─────────────────────────────────── */}
+      {/* ── Admin via AdminLogin (legacy secret route) ────────────────────── */}
       {currentPage === "admin" && !isAdminAuthenticated && (
         <AdminLogin navigate={navigate} onLoginSuccess={() => {
           sessionStorage.setItem("isAdminAuthenticated", "true");
@@ -133,10 +137,10 @@ export default function App() {
 
       {/* ── Staff Dashboard via UserLogin role='staff' ────────────────────── */}
       {currentPage === "staffdashboard" && userRole === "staff" && (
-        <AdminDashboard navigate={navigate} onLogout={handleAdminLogout} />
-        // TODO: Replace AdminDashboard with StaffDashboard component when ready
+        <StaffDashboard navigate={navigate} onLogout={handleUserLogout} />
       )}
 
+      {/* ── Rooms / About / Feature / FloorMap ───────────────────────────── */}
       {currentPage === "rooms" && (
         <RoomsPage navigate={navigate} goBack={goBack} />
       )}
@@ -149,6 +153,8 @@ export default function App() {
       {currentPage === "floormap" && (
         <FloorMapPage navigate={navigate} />
       )}
+
+      {/* ── User Auth ─────────────────────────────────────────────────────── */}
       {currentPage === "userlogin" && (
         <UserLogin
           navigate={navigate}
@@ -161,6 +167,8 @@ export default function App() {
           onLogout={handleUserLogout}
         />
       )}
+
+      {/* ── Lookup / Hotel Detail / Contact ──────────────────────────────── */}
       {currentPage === "lookup" && (
         <BookingLookup navigate={navigate} />
       )}
@@ -171,7 +179,7 @@ export default function App() {
         <ContactPage navigate={navigate} />
       )}
 
-      {/* ── Email activation page ─────────────────────────────────────────── */}
+      {/* ── Email Activation ──────────────────────────────────────────────── */}
       {currentPage === "activate" && activateParams && (
         <ActivatePage
           navigate={navigate}
