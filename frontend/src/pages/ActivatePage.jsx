@@ -1,19 +1,5 @@
 import { useEffect, useState } from "react";
 
-/**
- * ActivatePage
- * Route: /activate/:uid/:token
- *
- * Reads uid + token from the URL, calls the Django activation endpoint,
- * then either auto-logs the user in (on success) or shows an error with
- * a "Resend activation email" option.
- *
- * Props:
- *   navigate        – your existing navigate(route) helper
- *   onLoginSuccess  – called after successful activation + auto-login
- *   uid             – uidb64 from the URL (passed by your router)
- *   token           – token from the URL (passed by your router)
- */
 export default function ActivatePage({ navigate, onLoginSuccess, uid, token }) {
   const [status, setStatus]       = useState("loading");   // loading | success | error | already
   const [message, setMessage]     = useState("");
