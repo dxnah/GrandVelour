@@ -26,29 +26,61 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
 
-# ─── helpers ────────────────────────────────────────────────────────────────
+# ─── Custom Permissions ──────────────────────────────────────────────────────
+class IsAdminRole(BasePermission):
+    """Only Admin role can access."""
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role == 'admin'
+
+class IsStaffOrAdmin(BasePermission):
+    """Admin and Staff can access."""
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role in ['admin', 'staff']
+
 class IsBookingOwner(BasePermission):
     def has_object_permission(self, request, view, obj):
         return obj.user == request.user
 
+
+# ─── Helpers ─────────────────────────────────────────────────────────────────
 def _jwt(user):
     refresh = RefreshToken.for_user(user)
-    return {'refresh': str(refresh), 'access': str(refresh.access_token)}
+    return {
+        'refresh': str(refresh),
+        'access': str(refresh.access_token),
+    }
 
 
 # ─── Hotel ───────────────────────────────────────────────────────────────────
 class HotelListCreate(generics.ListCreateAPIView):
-    queryset         = Hotel.objects.all()
+    queryset = Hotel.objects.all()
     serializer_class = HotelSerializer
 
+    def get_permissions(self):
+        # Only admin can create; anyone can view
+        if self.request.method == 'POST':
+            return [IsAdminRole()]
+        return [AllowAny()]
+
 class HotelDetail(generics.RetrieveUpdateDestroyAPIView):
-    queryset         = Hotel.objects.all()
+    queryset = Hotel.objects.all()
     serializer_class = HotelSerializer
+
+    def get_permissions(self):
+        if self.request.method in ['PUT', 'PATCH', 'DELETE']:
+            return [IsAdminRole()]
+        return [AllowAny()]
 
 
 # ─── Room ────────────────────────────────────────────────────────────────────
 class RoomListCreate(generics.ListCreateAPIView):
     serializer_class = RoomSerializer
+
+    def get_permissions(self):
+        # Only admin/staff can create rooms; anyone can view
+        if self.request.method == 'POST':
+            return [IsStaffOrAdmin()]
+        return [AllowAny()]
 
     def get_queryset(self):
         today = date.today()
@@ -58,27 +90,38 @@ class RoomListCreate(generics.ListCreateAPIView):
         return Room.objects.all()
 
 class RoomDetail(generics.RetrieveUpdateDestroyAPIView):
-    queryset         = Room.objects.all()
+    queryset = Room.objects.all()
     serializer_class = RoomSerializer
+
+    def get_permissions(self):
+        if self.request.method in ['PUT', 'PATCH', 'DELETE']:
+            return [IsStaffOrAdmin()]
+        return [AllowAny()]
 
 
 # ─── Client ──────────────────────────────────────────────────────────────────
 class ClientListCreate(generics.ListCreateAPIView):
-    queryset         = Client.objects.all()
+    queryset = Client.objects.all()
     serializer_class = ClientSerializer
+    permission_classes = [IsStaffOrAdmin]
 
 class ClientDetail(generics.RetrieveUpdateDestroyAPIView):
-    queryset         = Client.objects.all()
+    queryset = Client.objects.all()
     serializer_class = ClientSerializer
+    permission_classes = [IsStaffOrAdmin]
 
 
 # ─── Booking ─────────────────────────────────────────────────────────────────
 class BookingListCreate(generics.ListCreateAPIView):
-    serializer_class  = BookingSerializer
+    serializer_class = BookingSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Booking.objects.filter(user=self.request.user)
+        user = self.request.user
+        # Admin and Staff can see ALL bookings; regular users see only their own
+        if user.role in ['admin', 'staff']:
+            return Booking.objects.all()
+        return Booking.objects.filter(user=user)
 
     def perform_create(self, serializer):
         booking = serializer.save(user=self.request.user)
@@ -87,11 +130,21 @@ class BookingListCreate(generics.ListCreateAPIView):
             booking.room.save()
 
 class BookingDetail(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class  = BookingSerializer
-    permission_classes = [IsAuthenticated, IsBookingOwner]
+    serializer_class = BookingSerializer
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Booking.objects.filter(user=self.request.user)
+        user = self.request.user
+        if user.role in ['admin', 'staff']:
+            return Booking.objects.all()
+        return Booking.objects.filter(user=user)
+
+    def get_permissions(self):
+        if self.request.method in ['PUT', 'PATCH', 'DELETE']:
+            if self.request.user.role in ['admin', 'staff']:
+                return [IsStaffOrAdmin()]
+            return [IsAuthenticated(), IsBookingOwner()]
+        return [IsAuthenticated()]
 
     def perform_update(self, serializer):
         booking = serializer.save()
@@ -100,22 +153,30 @@ class BookingDetail(generics.RetrieveUpdateDestroyAPIView):
 
 class MyBookings(APIView):
     permission_classes = [IsAuthenticated]
+
     def get(self, request):
-        return Response(BookingSerializer(Booking.objects.filter(user=request.user), many=True).data)
+        user = request.user
+        if user.role in ['admin', 'staff']:
+            bookings = Booking.objects.all()
+        else:
+            bookings = Booking.objects.filter(user=user)
+        return Response(BookingSerializer(bookings, many=True).data)
 
 class CancelBooking(APIView):
-    permission_classes = [IsAuthenticated, IsBookingOwner]
+    permission_classes = [IsAuthenticated]
 
-    def _get(self, pk):
+    def _get(self, pk, user):
         try:
             b = Booking.objects.get(pk=pk)
-            self.check_object_permissions(self.request, b)
+            # Admin/Staff can cancel any booking; user can only cancel own
+            if user.role not in ['admin', 'staff'] and b.user != user:
+                return None
             return b
         except Booking.DoesNotExist:
             return None
 
     def patch(self, request, pk):
-        booking = self._get(pk)
+        booking = self._get(pk, request.user)
         if not booking:
             return Response({'error': 'Booking not found.'}, status=status.HTTP_404_NOT_FOUND)
         if booking.status == 'cancelled':
@@ -127,18 +188,19 @@ class CancelBooking(APIView):
         return Response({'message': 'Booking cancelled.'})
 
 class RescheduleBooking(APIView):
-    permission_classes = [IsAuthenticated, IsBookingOwner]
+    permission_classes = [IsAuthenticated]
 
-    def _get(self, pk):
+    def _get(self, pk, user):
         try:
             b = Booking.objects.get(pk=pk)
-            self.check_object_permissions(self.request, b)
+            if user.role not in ['admin', 'staff'] and b.user != user:
+                return None
             return b
         except Booking.DoesNotExist:
             return None
 
     def patch(self, request, pk):
-        booking = self._get(pk)
+        booking = self._get(pk, request.user)
         if not booking:
             return Response({'error': 'Booking not found.'}, status=status.HTTP_404_NOT_FOUND)
         if booking.status == 'cancelled':
@@ -150,6 +212,20 @@ class RescheduleBooking(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+# ─── Admin: Manage All Users ─────────────────────────────────────────────────
+class AdminUserListView(generics.ListAPIView):
+    """Admin only — view all users and change their roles."""
+    queryset = User.objects.all()
+    serializer_class = UserProfileSerializer
+    permission_classes = [IsAdminRole]
+
+class AdminUserDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Admin only — edit or delete a specific user."""
+    queryset = User.objects.all()
+    serializer_class = UserProfileSerializer
+    permission_classes = [IsAdminRole]
+
+
 # ─── User: Register ──────────────────────────────────────────────────────────
 class UserRegisterView(APIView):
     permission_classes = [AllowAny]
@@ -157,11 +233,11 @@ class UserRegisterView(APIView):
     def post(self, request):
         serializer = UserRegistrationSerializer(data=request.data)
         if serializer.is_valid():
-            user = serializer.save()          # is_active=False set in serializer
+            user = serializer.save()  # is_active=False set in serializer
             try:
                 send_activation_email(user)
             except Exception as e:
-                print(f"[EMAIL ERROR] {e}")   # don't block registration
+                print(f"[EMAIL ERROR] {e}")
             return Response(
                 {'message': 'Account created! Please check your email to activate your account.'},
                 status=status.HTTP_201_CREATED,
@@ -171,16 +247,11 @@ class UserRegisterView(APIView):
 
 # ─── User: Activate ──────────────────────────────────────────────────────────
 class ActivateAccountView(APIView):
-    """
-    GET /api/v1/user/activate/<uidb64>/<token>/
-    Called by the React /activate/:uid/:token page.
-    On success returns JWT so React can auto-login the user.
-    """
     permission_classes = [AllowAny]
 
     def get(self, request, uidb64, token):
         try:
-            uid  = force_str(urlsafe_base64_decode(uidb64))
+            uid = force_str(urlsafe_base64_decode(uidb64))
             user = User.objects.get(pk=uid)
         except (TypeError, ValueError, OverflowError, User.DoesNotExist):
             return Response({'error': 'Invalid activation link.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -197,8 +268,8 @@ class ActivateAccountView(APIView):
         tokens = _jwt(user)
         return Response({
             'message': 'Account activated successfully!',
-            'tokens':  tokens,
-            'user':    UserProfileSerializer(user).data,
+            'tokens': tokens,
+            'user': UserProfileSerializer(user).data,
         })
 
 
@@ -213,7 +284,6 @@ class ResendActivationView(APIView):
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
-            # Generic response — don't reveal if email exists
             return Response({'message': 'If that email is registered, a new link has been sent.'})
 
         if user.is_active:
@@ -233,7 +303,7 @@ class UserLoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        email    = request.data.get('email', '')
+        email = request.data.get('email', '')
         password = request.data.get('password', '')
 
         try:
@@ -241,7 +311,6 @@ class UserLoginView(APIView):
         except User.DoesNotExist:
             return Response({'error': 'Invalid email or password.'}, status=status.HTTP_401_UNAUTHORIZED)
 
-        # authenticate() uses USERNAME_FIELD='email', so pass email as username
         user = authenticate(request, username=email, password=password)
 
         if user is None:
@@ -249,16 +318,19 @@ class UserLoginView(APIView):
 
         if not user.is_active:
             return Response(
-                {'error': 'Account not activated. Please check your email for the activation link.',
-                 'not_activated': True},          # ← flag so React can show Resend button
+                {
+                    'error': 'Account not activated. Please check your email for the activation link.',
+                    'not_activated': True,
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         tokens = _jwt(user)
         return Response({
             'refresh': tokens['refresh'],
-            'access':  tokens['access'],
-            'user':    UserProfileSerializer(user).data,
+            'access': tokens['access'],
+            'role': user.role,           # ← ROLE included so frontend can redirect
+            'user': UserProfileSerializer(user).data,
         })
 
 

@@ -56,7 +56,6 @@ class BookingSerializer(serializers.ModelSerializer):
         return data
 
 
-# ── CHANGED: password2 added, is_active=False on create ──────────────────────
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password  = serializers.CharField(write_only=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, label="Confirm Password")
@@ -77,7 +76,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data.pop('password2')
         password = validated_data.pop('password')
-        user = User(**validated_data, is_active=False)   # must verify email first
+        user = User(**validated_data, is_active=False)  # must verify email first
         user.set_password(password)
         user.save()
         return user
@@ -93,6 +92,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model  = User
         fields = [
             'id', 'email', 'first_name', 'last_name',
-            'address', 'age', 'birthday', 'phone', 'date_joined',
+            'address', 'age', 'birthday', 'phone',
+            'role',          # ← ADDED: para ma-include ang role sa login response
+            'date_joined',
         ]
-        read_only_fields = ['email', 'date_joined']
+        read_only_fields = ['email', 'date_joined', 'role']  # users cannot change own role

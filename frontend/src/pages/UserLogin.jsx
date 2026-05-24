@@ -10,8 +10,8 @@ export default function UserLogin({ navigate, onLoginSuccess }) {
   const [loading, setLoading]       = useState(false);
   const [shake, setShake]           = useState(false);
   const [toast, setToast]           = useState(null);
-  const [registered, setRegistered] = useState(false);   // show "check your email" screen
-  const [notActivated, setNotActivated] = useState(false); // show resend button on login
+  const [registered, setRegistered] = useState(false);
+  const [notActivated, setNotActivated] = useState(false);
 
   const showToast = (message, type = "success") => {
     setToast({ message, type });
@@ -38,12 +38,26 @@ export default function UserLogin({ navigate, onLoginSuccess }) {
       const data = await res.json();
 
       if (res.ok && data.access) {
+        // ── Save token, user data, and role ──────────────────────────────────
         sessionStorage.setItem("userToken", data.access);
         sessionStorage.setItem("userData", JSON.stringify(data.user));
-        showToast("Welcome back! Signing you in...");
-        setTimeout(() => { onLoginSuccess(); navigate("userprofile"); }, 800);
+        sessionStorage.setItem("userRole", data.role); // ← ROLE saved here
+
+        onLoginSuccess();
+
+        // ── Redirect based on role ────────────────────────────────────────────
+        if (data.role === "admin") {
+          showToast("Welcome, Admin! Redirecting to dashboard...");
+          setTimeout(() => navigate("admindashboard"), 800);
+        } else if (data.role === "staff") {
+          showToast("Welcome, Staff! Redirecting to dashboard...");
+          setTimeout(() => navigate("staffdashboard"), 800);
+        } else {
+          showToast("Welcome back! Signing you in...");
+          setTimeout(() => navigate("userprofile"), 800);
+        }
+
       } else if (res.status === 403 && data.not_activated) {
-        // Backend tells us the account exists but email not verified
         setNotActivated(true);
         setError("Account not activated. Please check your email or request a new link.");
         triggerShake();
@@ -86,7 +100,6 @@ export default function UserLogin({ navigate, onLoginSuccess }) {
       const data = await res.json();
 
       if (res.status === 201) {
-        // Show "check your email" screen — no auto-login anymore
         setRegistered(true);
       } else {
         const msgs = Object.values(data).flat();
@@ -248,7 +261,6 @@ export default function UserLogin({ navigate, onLoginSuccess }) {
               {loading ? "Signing In..." : "Sign In →"}
             </button>
 
-            {/* Resend button appears only when backend says account not activated */}
             {notActivated && (
               <button style={S.resendBtn} onClick={handleResend} disabled={loading}>
                 {loading ? "Sending..." : "Resend Activation Email"}
@@ -273,7 +285,7 @@ export default function UserLogin({ navigate, onLoginSuccess }) {
               <div>
                 <label style={S.label}>LAST NAME</label>
                 <input type="text" value={form.last_name} placeholder="dela Cruz"
-                  onChange={e => { setForm(f => ({ ...f, last_name: e.target.value })); setForm(f => ({ ...f, last_name: e.target.value })); setError(""); }}
+                  onChange={e => { setForm(f => ({ ...f, last_name: e.target.value })); setError(""); }}
                   style={S.input} className="gv-input" />
               </div>
             </div>
@@ -354,7 +366,6 @@ const S = {
   hint: { fontFamily:"'Jost', sans-serif", fontSize:"12px", color:"#4a3f32", textAlign:"center", letterSpacing:"0.5px" },
   switchLink: { color:"#c9a96e", cursor:"pointer", textDecoration:"underline" },
   divider: { height:"1px", background:"linear-gradient(90deg, transparent, rgba(201,169,110,0.2), transparent)", margin:"24px 0" },
-  // "Check your email" screen
   emailIcon: { fontSize:"40px", marginBottom:"16px" },
   checkTitle: { fontFamily:"'Cormorant Garamond', serif", fontSize:"26px", fontWeight:300, color:"#e8dcc8", margin:"0 0 12px", letterSpacing:"0.5px" },
   checkSub: { fontFamily:"'Jost', sans-serif", fontSize:"13px", color:"#6a5f52", lineHeight:1.8, margin:"0 0 16px" },
