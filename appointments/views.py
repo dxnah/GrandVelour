@@ -1,17 +1,18 @@
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission
+from rest_framework.permissions import IsAuthenticated, BasePermission, AllowAny
 from django.contrib.auth import authenticate
+from django.conf import settings
 from django.utils.http import urlsafe_base64_decode
 from django.utils.encoding import force_str
 from django.contrib.auth.tokens import default_token_generator
 from datetime import date
-
 from .models import Hotel, Room, Client, Booking, User
 from .serializers import (
     HotelSerializer, RoomSerializer, ClientSerializer,
-    BookingSerializer, UserRegistrationSerializer, UserProfileSerializer,
+    BookingSerializer, UserRegistrationSerializer,
+    UserProfileSerializer,
 )
 from .email_utils import send_activation_email
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -51,7 +52,7 @@ def _jwt(user):
     }
 
 
-# ─── Hotel ───────────────────────────────────────────────────────────────────
+# ─── Hotel ────────────────────────────────────────────────────────────────────
 class HotelListCreate(generics.ListCreateAPIView):
     queryset = Hotel.objects.all()
     serializer_class = HotelSerializer
@@ -72,7 +73,7 @@ class HotelDetail(generics.RetrieveUpdateDestroyAPIView):
         return [AllowAny()]
 
 
-# ─── Room ────────────────────────────────────────────────────────────────────
+# ─── Room ─────────────────────────────────────────────────────────────────────
 class RoomListCreate(generics.ListCreateAPIView):
     serializer_class = RoomSerializer
 
@@ -99,7 +100,7 @@ class RoomDetail(generics.RetrieveUpdateDestroyAPIView):
         return [AllowAny()]
 
 
-# ─── Client ──────────────────────────────────────────────────────────────────
+# ─── Client ───────────────────────────────────────────────────────────────────
 class ClientListCreate(generics.ListCreateAPIView):
     queryset = Client.objects.all()
     serializer_class = ClientSerializer
@@ -111,7 +112,7 @@ class ClientDetail(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsStaffOrAdmin]
 
 
-# ─── Booking ─────────────────────────────────────────────────────────────────
+# ─── Booking ──────────────────────────────────────────────────────────────────
 class BookingListCreate(generics.ListCreateAPIView):
     serializer_class = BookingSerializer
     permission_classes = [IsAuthenticated]
@@ -239,13 +240,13 @@ class UserRegisterView(APIView):
             except Exception as e:
                 print(f"[EMAIL ERROR] {e}")
             return Response(
-                {'message': 'Account created! Please check your email to activate your account.'},
-                status=status.HTTP_201_CREATED,
+                {'message': 'Registration successful. Please check your email to activate your account.'},
+                status=status.HTTP_201_CREATED
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-# ─── User: Activate ──────────────────────────────────────────────────────────
+# ─── Email Activation ─────────────────────────────────────────────────────────
 class ActivateAccountView(APIView):
     permission_classes = [AllowAny]
 
@@ -257,7 +258,7 @@ class ActivateAccountView(APIView):
             return Response({'error': 'Invalid activation link.'}, status=status.HTTP_400_BAD_REQUEST)
 
         if user.is_active:
-            return Response({'message': 'Account already active. You can log in.'})
+            return Response({'message': 'Account is already activated.'}, status=status.HTTP_200_OK)
 
         if not default_token_generator.check_token(user, token):
             return Response({'error': 'Activation link is invalid or has expired.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -273,7 +274,7 @@ class ActivateAccountView(APIView):
         })
 
 
-# ─── User: Resend Activation ─────────────────────────────────────────────────
+# ─── Resend Activation Email ──────────────────────────────────────────────────
 class ResendActivationView(APIView):
     permission_classes = [AllowAny]
 
@@ -281,24 +282,25 @@ class ResendActivationView(APIView):
         email = request.data.get('email', '').strip()
         if not email:
             return Response({'error': 'Email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
             return Response({'message': 'If that email is registered, a new link has been sent.'})
 
         if user.is_active:
-            return Response({'message': 'This account is already active. You can log in.'})
+            return Response({'error': 'This account is already activated.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             send_activation_email(user)
         except Exception as e:
-            print(f"[EMAIL ERROR] {e}")
-            return Response({'error': 'Failed to send email. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            print(f'[Email Error] Could not resend activation email to {user.email}: {e}')
+            return Response({'error': 'Failed to send email. Please try again later.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        return Response({'message': 'A new activation link has been sent to your email.'})
+        return Response({'message': 'Activation email resent. Please check your inbox.'}, status=status.HTTP_200_OK)
 
 
-# ─── User: Login ─────────────────────────────────────────────────────────────
+# ─── User Login ───────────────────────────────────────────────────────────────
 class UserLoginView(APIView):
     permission_classes = [AllowAny]
 
@@ -307,7 +309,7 @@ class UserLoginView(APIView):
         password = request.data.get('password', '')
 
         try:
-            user_obj = User.objects.get(email=email)
+            User.objects.get(email=email)
         except User.DoesNotExist:
             return Response({'error': 'Invalid email or password.'}, status=status.HTTP_401_UNAUTHORIZED)
 
@@ -325,7 +327,7 @@ class UserLoginView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        tokens = _jwt(user)
+        refresh = RefreshToken.for_user(user)
         return Response({
             'refresh': tokens['refresh'],
             'access': tokens['access'],
@@ -334,7 +336,7 @@ class UserLoginView(APIView):
         })
 
 
-# ─── User: Profile ───────────────────────────────────────────────────────────
+# ─── User Profile ─────────────────────────────────────────────────────────────
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
