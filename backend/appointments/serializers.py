@@ -97,3 +97,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'date_joined',
         ]
         read_only_fields = ['email', 'date_joined', 'role']  # users cannot change own role
+
+class AdminUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'email', 'first_name', 'last_name', 'role', 'is_active', 'date_joined']
+        read_only_fields = ['email', 'date_joined']

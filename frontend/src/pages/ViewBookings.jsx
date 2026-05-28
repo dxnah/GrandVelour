@@ -101,29 +101,35 @@ export default function ViewBookings({ navigate, goBack, previousPage }) {
     setTimeout(() => setToast(null), 3500);
   };
 
+  // Helper: always get a fresh auth header
+  const getAuthHeader = () => {
+    const token = sessionStorage.getItem("userToken");
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
   useEffect(() => {
     const fetchBookings = async () => {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`${API_BASE}/bookings/`);
+        const res = await fetch(`${API_BASE}/bookings/`, {
+          headers: getAuthHeader(),
+        });
         if (!res.ok) throw new Error("Failed to fetch");
         const data = await res.json();
         const allBookings = Array.isArray(data) ? data : [];
 
-        // Filter by logged-in user if session exists
         const userData = sessionStorage.getItem("userData");
         if (userData) {
           const user = JSON.parse(userData);
           const userEmail = user.email?.toLowerCase();
           const userName = `${user.first_name || ""} ${user.last_name || ""}`.trim().toLowerCase();
-          const filtered = allBookings.filter(b =>
-            (b.client_name || "").toLowerCase() === userName ||
-            (b.client_email || "").toLowerCase() === userEmail
+          const filtered = allBookings.filter(booking =>
+            (booking.client_name || "").toLowerCase() === userName ||
+            (booking.client_email || "").toLowerCase() === userEmail
           );
           setBookings(filtered);
         } else {
-          // Not logged in — show all (guest view)
           setBookings(allBookings);
         }
       } catch {
@@ -161,7 +167,9 @@ export default function ViewBookings({ navigate, goBack, previousPage }) {
     });
     if (b.client) {
       try {
-        const res = await fetch(`${API_BASE}/clients/${b.client}/`);
+        const res = await fetch(`${API_BASE}/clients/${b.client}/`, {
+          headers: getAuthHeader(),
+        });
         if (res.ok) {
           const clientData = await res.json();
           setEditForm({
@@ -382,6 +390,7 @@ export default function ViewBookings({ navigate, goBack, previousPage }) {
                     </div>
                   )}
 
+                  {/* ── EDIT PROFILE ── */}
                   {activeAction === "edit" && (
                     <div style={{ padding: "28px 32px" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
@@ -408,15 +417,16 @@ export default function ViewBookings({ navigate, goBack, previousPage }) {
                         <button
                           style={{ background: "#6a9fb5", border: "none", color: "#0d0d0d", padding: "12px", fontFamily: "'Jost',sans-serif", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", fontWeight: 500, marginTop: "4px" }}
                           onClick={async () => {
+                            const authHeader = getAuthHeader();
                             const [clientRes, bookingRes] = await Promise.all([
                               fetch(`${API_BASE}/clients/${selected.client}/`, {
                                 method: "PATCH",
-                                headers: { "Content-Type": "application/json" },
+                                headers: { "Content-Type": "application/json", ...authHeader },
                                 body: JSON.stringify({ name: editForm.name, email: editForm.email, phone: editForm.phone }),
                               }),
                               fetch(`${API_BASE}/bookings/${selected.id}/`, {
                                 method: "PATCH",
-                                headers: { "Content-Type": "application/json" },
+                                headers: { "Content-Type": "application/json", ...authHeader },
                                 body: JSON.stringify({ notes: editForm.notes }),
                               }),
                             ]);
@@ -438,6 +448,7 @@ export default function ViewBookings({ navigate, goBack, previousPage }) {
                     </div>
                   )}
 
+                  {/* ── RESCHEDULE ── */}
                   {activeAction === "reschedule" && (
                     <div style={{ padding: "28px 32px" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
@@ -460,19 +471,25 @@ export default function ViewBookings({ navigate, goBack, previousPage }) {
                       </div>
                       <button
                         style={{ background: "rgba(201,169,110,0.15)", border: "1px solid rgba(201,169,110,0.3)", color: "#c9a96e", padding: "12px", fontFamily: "'Jost',sans-serif", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer", width: "100%" }}
-                        onClick={async () => {
-                          const newCheckIn = document.getElementById("modal-checkin").value;
-                          const newCheckOut = document.getElementById("modal-checkout").value;
-                          if (!newCheckIn || !newCheckOut) {
-                            showToast("Please select both dates.", "error");
-                            return;
-                          }
-                          const res = await fetch(`${API_BASE}/bookings/${selected.id}/reschedule/`, {
-                            method: "PATCH",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ check_in: newCheckIn, check_out: newCheckOut }),
-                          });
-                          if (res.ok) {
+                        // After
+                          onClick={async () => {
+                            const newCheckIn = document.getElementById("modal-checkin").value;
+                            const newCheckOut = document.getElementById("modal-checkout").value;
+                            if (!newCheckIn || !newCheckOut) {
+                              showToast("Please select both dates.", "error");
+                              return;
+                            }
+                            const authHeader = getAuthHeader();
+                            if (!authHeader.Authorization) {
+                              showToast("You must be signed in to reschedule.", "error");
+                              return;
+                            }
+                            const res = await fetch(`${API_BASE}/bookings/${selected.id}/reschedule/`, {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json", ...authHeader },
+                              body: JSON.stringify({ check_in: newCheckIn, check_out: newCheckOut }),
+                            });
+                            if (res.ok) {
                             const updated = await res.json();
                             setBookings(prev => prev.map(b => b.id === selected.id ? { ...b, ...updated } : b));
                             setSelected(prev => ({ ...prev, ...updated }));
@@ -488,6 +505,7 @@ export default function ViewBookings({ navigate, goBack, previousPage }) {
                     </div>
                   )}
 
+                  {/* ── CANCEL ── */}
                   {activeAction === "cancel" && (
                     <div style={{ padding: "28px 32px" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
@@ -498,7 +516,10 @@ export default function ViewBookings({ navigate, goBack, previousPage }) {
                       <button
                         style={{ width: "100%", background: "rgba(201,123,110,0.15)", border: "1px solid rgba(201,123,110,0.4)", color: "#c97b6e", padding: "12px", fontFamily: "'Jost',sans-serif", fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase", cursor: "pointer" }}
                         onClick={async () => {
-                          const res = await fetch(`${API_BASE}/bookings/${selected.id}/cancel/`, { method: "PATCH" });
+                          const res = await fetch(`${API_BASE}/bookings/${selected.id}/cancel/`, {
+                            method: "PATCH",
+                            headers: getAuthHeader(),
+                          });
                           if (res.ok) {
                             setBookings(prev => prev.map(b => b.id === selected.id ? { ...b, status: "cancelled" } : b));
                             setSelected(prev => ({ ...prev, status: "cancelled" }));

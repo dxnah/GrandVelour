@@ -19,7 +19,7 @@ export default function AdminLogin({ onLoginSuccess, navigate }) {
     setError("");
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/v1/auth/token/", {
+      const response = await fetch("http://127.0.0.1:8000/api/v1/auth/users/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: username, password }),
@@ -28,7 +28,8 @@ export default function AdminLogin({ onLoginSuccess, navigate }) {
       const data = await response.json();
 
       if (response.ok && data.access) {
-        localStorage.setItem("authToken", data.access);
+        sessionStorage.setItem("userToken", data.access);
+        sessionStorage.setItem("userRole", data.role || "admin");
         onLoginSuccess();
       } else {
         setError("Invalid credentials. Please try again.");

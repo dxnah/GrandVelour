@@ -15,35 +15,42 @@ export default function BookingLookup({ navigate }) {
   };
 
   const handleLookup = async () => {
-    if (!ref.trim() || !email.trim()) {
-      setError("Please enter both your booking reference and email address.");
-      return;
+  if (!ref.trim() || !email.trim()) {
+    setError("Please enter both your booking reference and email address.");
+    return;
+  }
+  setLoading(true);
+  setError("");
+  setResult(null);
+  try {
+    // Strip "GV-" prefix and leading zeros to get the numeric ID
+    const idFromRef = ref.trim().replace(/^GV-/i, "").replace(/^0+/, "") || "0";
+
+    // Fetch with auth token if available
+    const token = sessionStorage.getItem("userToken");
+    const res = await fetch(`${API_BASE}/bookings/`, {
+      headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+    });
+    if (!res.ok) throw new Error("Failed to fetch bookings");
+    const data = await res.json();
+
+    const match = data.find(b => {
+      const idMatch = String(b.id) === idFromRef;
+      const emailMatch = (b.client_email || "").toLowerCase() === email.trim().toLowerCase();
+      return idMatch && emailMatch;
+    });
+
+    if (match) {
+      setResult(match);
+    } else {
+      setError("No booking found. Please check your reference number and email address.");
     }
-    setLoading(true);
-    setError("");
-    setResult(null);
-    try {
-      const res = await fetch(`${API_BASE}/bookings/`);
-      if (!res.ok) throw new Error("Failed to fetch bookings");
-      const data = await res.json();
-      const idFromRef = ref.replace(/^GV-/i, "").replace(/^0+/, "");
-      const match = data.find(b => {
-        const bId = String(b.id);
-        const refId = idFromRef;
-        const emailMatch = (b.client_email || "").toLowerCase() === email.trim().toLowerCase();
-        return bId === refId && emailMatch;
-      });
-      if (match) {
-        setResult(match);
-      } else {
-        setError("No booking found. Please check your reference number and email address.");
-      }
-    } catch {
-      setError("Unable to connect to server. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  } catch {
+    setError("Unable to connect to server. Please try again.");
+  } finally {
+    setLoading(false);
+  }
+};
 
   const nights = result
     ? Math.max(0, (new Date(result.check_out) - new Date(result.check_in)) / (1000 * 60 * 60 * 24))

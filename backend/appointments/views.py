@@ -14,7 +14,7 @@ from .models import Hotel, Room, Client, Booking, User
 from .serializers import (
     HotelSerializer, RoomSerializer, ClientSerializer,
     BookingSerializer, UserRegistrationSerializer,
-    UserProfileSerializer,
+    UserProfileSerializer, AdminUserSerializer,
 )
 from .email_utils import send_activation_email
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -71,29 +71,6 @@ class ChatbotView(APIView):
         if not messages:
             return Response({'error': 'No messages provided.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        api_key = os.getenv('ANTHROPIC_API_KEY')
-        if not api_key:
-            return Response({'error': 'Chatbot service unavailable.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-
-        try:
-            import anthropic
-            client = anthropic.Anthropic(api_key=api_key)
-            response = client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=1000,
-                system=CHATBOT_SYSTEM,
-                messages=messages,
-            )
-            reply = response.content[0].text
-            return Response({'reply': reply})
-        except Exception as e:
-            print(f"[CHATBOT ERROR] {e}")
-            return Response(
-                {'error': 'Chatbot temporarily unavailable. Please try again.'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-
 # ─── Hotel ───────────────────────────────────────────────────────────────────
 class HotelListCreate(generics.ListCreateAPIView):
     queryset = Hotel.objects.all()
@@ -146,10 +123,15 @@ class ClientListCreate(generics.ListCreateAPIView):
     serializer_class = ClientSerializer
     permission_classes = [AllowAny]
 
+# After
 class ClientDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = Client.objects.all()
     serializer_class = ClientSerializer
-    permission_classes = [IsStaffOrAdmin]
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated()]
+        return [IsStaffOrAdmin()]
 
 
 # ─── Booking ──────────────────────────────────────────────────────────────────
@@ -164,7 +146,7 @@ class BookingListCreate(generics.ListCreateAPIView):
         return Booking.objects.filter(user=user)
 
     def perform_create(self, serializer):
-        booking = serializer.save()  # remove user=self.request.user
+        booking = serializer.save(user=self.request.user)
         if booking.status == 'confirmed':
             booking.room.is_available = False
             booking.room.save()
@@ -226,6 +208,7 @@ class CancelBooking(APIView):
         booking.save()
         return Response({'message': 'Booking cancelled.'})
 
+
 class RescheduleBooking(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -244,22 +227,36 @@ class RescheduleBooking(APIView):
             return Response({'error': 'Booking not found.'}, status=status.HTTP_404_NOT_FOUND)
         if booking.status == 'cancelled':
             return Response({'error': 'Cannot reschedule a cancelled booking.'}, status=status.HTTP_400_BAD_REQUEST)
-        serializer = BookingSerializer(booking, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save(status='rescheduled')
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        new_check_in = request.data.get('check_in')
+        new_check_out = request.data.get('check_out')
+        if not new_check_in or not new_check_out:
+            return Response({'error': 'check_in and check_out are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from datetime import date
+        try:
+            booking.check_in = date.fromisoformat(new_check_in)
+            booking.check_out = date.fromisoformat(new_check_out)
+        except ValueError:
+            return Response({'error': 'Invalid date format. Use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if booking.check_out <= booking.check_in:
+            return Response({'error': 'Check-out must be after check-in.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        booking.status = 'rescheduled'
+        booking.save()  # triggers total_price recalculation in model's save()
+        return Response(BookingSerializer(booking).data)
 
 
 # ─── Admin: Manage All Users ─────────────────────────────────────────────────
 class AdminUserListView(generics.ListAPIView):
     queryset = User.objects.all()
-    serializer_class = UserProfileSerializer
+    serializer_class = AdminUserSerializer   # ← changed
     permission_classes = [IsAdminRole]
 
 class AdminUserDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = User.objects.all()
-    serializer_class = UserProfileSerializer
+    serializer_class = AdminUserSerializer   # ← changed
     permission_classes = [IsAdminRole]
 
 

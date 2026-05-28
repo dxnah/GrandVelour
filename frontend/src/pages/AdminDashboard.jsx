@@ -24,7 +24,7 @@ export default function AdminDashboard({ navigate, onLogout }) {
   const [, setSelectedClientIds] = useState([]);
   const [selectedBookingIds, setSelectedBookingIds] = useState([]);
 
-  const token = sessionStorage.getItem("userToken") || localStorage.getItem("authToken");
+  const token = sessionStorage.getItem("userToken");
   const headers = {
     "Content-Type": "application/json",
     ...(token && { Authorization: `Bearer ${token}` }),
@@ -72,9 +72,28 @@ export default function AdminDashboard({ navigate, onLogout }) {
     };
     const url = isEdit ? `${endpoints[type]}${form.id}/` : endpoints[type];
     const method = isEdit ? "PUT" : "POST";
+    
     const payload = { ...form };
     delete payload.hotel_name;
     delete payload.client_name;
+
+    
+    if (type === "user") {
+      // Only send role and is_active — everything else is read-only
+      await fetch(`${endpoints[type]}${form.id}/`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({
+          role: form.role,
+          is_active: form.is_active === "true" || form.is_active === true,
+        }),
+      }).then(async res => {
+        if (!res.ok) { const e = await res.json(); alert("Error: " + JSON.stringify(e)); return; }
+        await fetchAll();
+        closeModal();
+      });
+      return;
+    }
 
     if (type === "client" && !payload.name) { alert("Full name is required."); return; }
     if (type === "client" && !payload.phone) { alert("Phone number is required."); return; }

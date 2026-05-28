@@ -99,8 +99,7 @@ export default function App() {
   const userRole = sessionStorage.getItem("userRole");
 
   // ── Hide chatbot on admin/staff dashboards ─────────────────────────────────
-  const showChatbot = isUserAuthenticated && 
-  !["admindashboard", "staffdashboard", "admin"].includes(currentPage);
+  const showChatbot = !["admindashboard", "staffdashboard", "admin"].includes(currentPage);
 
   return (
     <div style={{ fontFamily: "'Cormorant Garamond', serif" }}>

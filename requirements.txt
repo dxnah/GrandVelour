@@ -17,3 +17,5 @@ six==1.17.0
 sqlparse==0.5.5
 tzdata==2026.2
 urllib3==2.6.3
+gunicorn==21.2.0
+whitenoise==6.9.0

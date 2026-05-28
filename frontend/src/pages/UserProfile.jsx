@@ -36,7 +36,9 @@ export default function UserProfile({ navigate, onLogout }) {
           sessionStorage.setItem("userData", JSON.stringify(me));
           setUser(me);
         }
-        const bRes = await fetch(`${API_BASE}/bookings/`);
+        const bRes = await fetch(`${API_BASE}/bookings/`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         if (bRes.ok) {
           const allBookings = await bRes.json();
           const cached = sessionStorage.getItem("userData");
