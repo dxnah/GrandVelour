@@ -340,20 +340,16 @@ class UserLoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        email = request.data.get('email', '')
+        email    = request.data.get('email', '').strip()
         password = request.data.get('password', '')
 
         try:
-            User.objects.get(email=email)
+            user_obj = User.objects.get(email=email)
         except User.DoesNotExist:
             return Response({'error': 'Invalid email or password.'}, status=status.HTTP_401_UNAUTHORIZED)
 
-        user = authenticate(request, username=email, password=password)
-
-        if user is None:
-            return Response({'error': 'Invalid email or password.'}, status=status.HTTP_401_UNAUTHORIZED)
-
-        if not user.is_active:
+        # ← Check is_active BEFORE authenticate()
+        if not user_obj.is_active:
             return Response(
                 {
                     'error': 'Account not activated. Please check your email for the activation link.',
@@ -362,12 +358,16 @@ class UserLoginView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        user = authenticate(request, username=email, password=password)
+        if user is None:
+            return Response({'error': 'Invalid email or password.'}, status=status.HTTP_401_UNAUTHORIZED)
+
         refresh = RefreshToken.for_user(user)
         return Response({
             'refresh': str(refresh),
-            'access': str(refresh.access_token),
-            'role': user.role,
-            'user': UserProfileSerializer(user).data,
+            'access':  str(refresh.access_token),
+            'role':    user.role,
+            'user':    UserProfileSerializer(user).data,
         })
 
 
