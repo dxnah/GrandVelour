@@ -3,23 +3,27 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
-print("EMAIL USER:", os.getenv('EMAIL_HOST_USER'))
-print("EMAIL PASS:", os.getenv('EMAIL_HOST_PASSWORD'))
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = 'django-insecure-g1#jg1h$_zm1e26+1emm8adspwhd0*2c5a8l7!!jj=2%v)hezh'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'fallback-dev-key-change-this')
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-DEBUG = True
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    '192.168.1.5',
+    'https://grandvelour.onrender.com',
+]
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.1.5']
-
-# ─── CORS ─────────────────────────────────────────────────────────────────────
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://localhost:3000",
-    "http://192.168.1.5:3000",
+    # Vercel URL added after deploy
 ]
+
+CORS_ALLOW_ALL_ORIGINS = False
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -38,6 +42,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # ← added
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -77,7 +82,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'postgres',
         'USER': 'postgres.ocfupyxszmyjgbqshjua',
-        'PASSWORD': 'MIKMIKMANAGE.PY',
+        'PASSWORD': os.environ.get('DB_PASSWORD', ''),  # ← from env
         'HOST': 'aws-1-ap-southeast-1.pooler.supabase.com',
         'PORT': '5432',
     }
@@ -95,7 +100,11 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = 'static/'
+# ─── Static Files ─────────────────────────────────────────────────────────────
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ─── REST Framework ───────────────────────────────────────────────────────────
@@ -104,15 +113,6 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
 }
-
-# --- CORS ---
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "http://192.168.0.104:8000",  # ← imong IP
-    "http://192.168.0.104:3000",  # ← frontend
-]
-
 
 # ─── Auth ─────────────────────────────────────────────────────────────────────
 AUTH_USER_MODEL = 'appointments.User'
@@ -129,14 +129,17 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'grandvelour@gmail.com')
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', 'qqtx pbhd gcyt huvr')
-DEFAULT_FROM_EMAIL = os.environ.get('EMAIL_HOST_USER', 'grandvelour@gmail.com')
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.environ.get('EMAIL_HOST_USER', '')
+
+# ─── Frontend URL (for activation emails) ─────────────────────────────────────
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
 
 # ─── Cloudinary ───────────────────────────────────────────────────────────────
 CLOUDINARY_STORAGE = {
-    'CLOUD_NAME': os.getenv('CLOUDINARY_CLOUD_NAME', 'your_cloud_name'),
-    'API_KEY': os.getenv('CLOUDINARY_API_KEY', 'your_api_key'),
-    'API_SECRET': os.getenv('CLOUDINARY_API_SECRET', 'your_api_secret'),
+    'CLOUD_NAME': os.getenv('CLOUDINARY_CLOUD_NAME', ''),
+    'API_KEY': os.getenv('CLOUDINARY_API_KEY', ''),
+    'API_SECRET': os.getenv('CLOUDINARY_API_SECRET', ''),
 }
 DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
