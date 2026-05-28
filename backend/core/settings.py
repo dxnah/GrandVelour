@@ -13,7 +13,7 @@ ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
     '192.168.1.5',
-    'https://grandvelour.onrender.com',
+    'grandvelour.onrender.com',
 ]
 
 CORS_ALLOWED_ORIGINS = [
