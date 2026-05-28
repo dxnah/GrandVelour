@@ -28,7 +28,7 @@ export default function UserProfile({ navigate, onLogout }) {
           const parsed = JSON.parse(cached);
           setUser(parsed);
         }
-        const res = await fetch("http://127.0.0.1:8000/api/v1/user/profile/", {
+        const res = await fetch(`${API_BASE}/user/profile/`, {
           headers: { "Authorization": `Bearer ${token}` },
         });
         if (res.ok) {

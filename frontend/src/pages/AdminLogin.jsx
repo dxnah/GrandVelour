@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { API_BASE } from "../api";
 
 // Hardcoded admin credentials (replace with real auth when backend is ready)
 export default function AdminLogin({ onLoginSuccess, navigate }) {
@@ -19,7 +20,7 @@ export default function AdminLogin({ onLoginSuccess, navigate }) {
     setError("");
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/v1/auth/users/", {
+      const response = await fetch(`${API_BASE}/auth/users/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: username, password }),

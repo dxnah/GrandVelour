@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { API_BASE } from "../api";
 
 export default function ActivatePage({ navigate, onLoginSuccess, uid, token }) {
   const [status, setStatus]       = useState("loading");   // loading | success | error | already
@@ -17,7 +18,7 @@ export default function ActivatePage({ navigate, onLoginSuccess, uid, token }) {
     const activate = async () => {
       try {
         const res  = await fetch(
-          `http://127.0.0.1:8000/api/v1/user/activate/${uid}/${token}/`,
+          `${API_BASE}/user/activate/${uid}/${token}/`,
           { method: "GET" }
         );
         const data = await res.json();
@@ -53,7 +54,7 @@ export default function ActivatePage({ navigate, onLoginSuccess, uid, token }) {
     if (!resendEmail) return;
     setResendLoading(true);
     try {
-      const res  = await fetch("http://127.0.0.1:8000/api/v1/user/resend-activation/", {
+      const res  = await fetch(`${API_BASE}/user/resend-activation/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: resendEmail }),

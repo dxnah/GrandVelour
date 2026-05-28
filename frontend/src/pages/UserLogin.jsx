@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { API_BASE } from "../api";
 
 function TextField({ fieldKey, label, type, placeholder, value, onChange, onEnter }) {
   return (
@@ -121,7 +122,7 @@ export default function UserLogin({ navigate, onLoginSuccess }) {
     }
     setLoading(true); setError(""); setNotActivated(false);
     try {
-      const res  = await fetch("http://127.0.0.1:8000/api/v1/user/login/", {
+      const res  = await fetch(`${API_BASE}/user/login/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: loginForm.email, password: loginForm.password }),
@@ -175,7 +176,7 @@ export default function UserLogin({ navigate, onLoginSuccess }) {
     }
     setLoading(true); setError("");
     try {
-      const res  = await fetch("http://127.0.0.1:8000/api/v1/user/register/", {
+      const res  = await fetch(`${API_BASE}/user/register/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -210,7 +211,7 @@ export default function UserLogin({ navigate, onLoginSuccess }) {
     }
     setLoading(true);
     try {
-      const res  = await fetch("http://127.0.0.1:8000/api/v1/user/resend-activation/", {
+      const res  = await fetch(`${API_BASE}/user/resend-activation/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: loginForm.email }),
@@ -260,7 +261,7 @@ export default function UserLogin({ navigate, onLoginSuccess }) {
             onClick={async () => {
               setLoading(true);
               try {
-                await fetch("http://127.0.0.1:8000/api/v1/user/resend-activation/", {
+                await fetch(`${API_BASE}/user/resend-activation/`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ email: registerForm.email }),
