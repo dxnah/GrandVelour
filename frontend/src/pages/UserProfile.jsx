@@ -10,10 +10,134 @@ function SkeletonBlock({ width = "100%", height = "20px", style = {} }) {
   );
 }
 
+// ── Profile Edit Form (outside component) ─────────────────────────────────────
+function ProfileEditForm({ user, onSave }) {
+  const [form, setForm] = useState({
+    first_name: user?.first_name || "",
+    last_name:  user?.last_name  || "",
+    phone:      user?.phone      || "",
+    address:    user?.address    || "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved]   = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    const token = sessionStorage.getItem("userToken");
+    try {
+      const res = await fetch(`${API_BASE}/user/profile/`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(form),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        sessionStorage.setItem("userData", JSON.stringify(updated));
+        onSave(updated);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2500);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <div style={S.panelHeader}>
+        <div>
+          <div style={S.panelEyebrow}>ACCOUNT</div>
+          <h3 style={S.panelTitle}>Profile Details</h3>
+          <p style={S.panelSub}>Edit your personal information</p>
+        </div>
+        <div style={S.statusPill}><span style={S.statusDot} />Active Guest</div>
+      </div>
+
+      {/* Email — read only */}
+      <div style={{ ...S.infoCard, marginBottom: "12px" }}>
+        <div style={S.infoCardTop}>
+          <span style={S.infoCardIcon}>✉</span>
+          <span style={S.infoCardLabel}>EMAIL ADDRESS</span>
+        </div>
+        <span style={{ ...S.infoCardValue, fontSize: "15px", color: "#6a5f52" }}>{user?.email}</span>
+      </div>
+
+      {/* Editable fields */}
+      <div style={S.infoGrid}>
+        {[
+          { label: "FIRST NAME", key: "first_name", placeholder: "Juan" },
+          { label: "LAST NAME",  key: "last_name",  placeholder: "dela Cruz" },
+          { label: "PHONE",      key: "phone",      placeholder: "09XX-XXX-XXXX" },
+          { label: "ADDRESS",    key: "address",    placeholder: "Your address" },
+        ].map(({ label, key, placeholder }) => (
+          <div key={key} style={S.infoCard}>
+            <span style={S.infoCardLabel}>{label}</span>
+            <input
+              value={form[key]}
+              placeholder={placeholder}
+              onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+              style={{
+                background: "transparent",
+                border: "none",
+                borderBottom: "1px solid rgba(201,169,110,0.2)",
+                color: "#e8dcc8",
+                fontFamily: "'Jost', sans-serif",
+                fontSize: "14px",
+                padding: "4px 0",
+                width: "100%",
+                outline: "none",
+              }}
+            />
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: "20px", display: "flex", gap: "12px", alignItems: "center" }}>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          style={{
+            background: "#c9a96e", border: "none", color: "#0d0d0d",
+            padding: "12px 28px", fontFamily: "'Jost', sans-serif",
+            fontSize: "11px", letterSpacing: "2px", textTransform: "uppercase",
+            cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1,
+          }}>
+          {saving ? "Saving..." : "Save Changes"}
+        </button>
+        {saved && (
+          <span style={{ fontFamily: "'Jost', sans-serif", fontSize: "12px", color: "#7eb87e" }}>
+            ✓ Saved successfully
+          </span>
+        )}
+      </div>
+
+      {/* Security section */}
+      <div style={{ marginTop: "36px" }}>
+        <div style={S.sectionHeader}>
+          <div style={S.sectionLine} />
+          <span style={S.sectionTitle}>SECURITY</span>
+          <div style={S.sectionLine} />
+        </div>
+        <div style={S.securityCard}>
+          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+            <div style={S.securityIcon}>🔑</div>
+            <div>
+              <p style={S.securityLabel}>Password</p>
+              <p style={S.securitySub}>Last updated: unknown</p>
+            </div>
+          </div>
+          <button style={S.securityBtn}>Change Password</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Component ─────────────────────────────────────────────────────────────
 export default function UserProfile({ navigate, onLogout }) {
-  const [user, setUser] = useState(null);
+  const [user, setUser]         = useState(null);
   const [bookings, setBookings] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]   = useState(true);
   const [activeTab, setActiveTab] = useState("profile");
 
   useEffect(() => {
@@ -24,36 +148,24 @@ export default function UserProfile({ navigate, onLogout }) {
       setLoading(true);
       try {
         const cached = sessionStorage.getItem("userData");
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          setUser(parsed);
-        }
+        if (cached) setUser(JSON.parse(cached));
+
         const res = await fetch(`${API_BASE}/user/profile/`, {
-          headers: { "Authorization": `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
           const me = await res.json();
           sessionStorage.setItem("userData", JSON.stringify(me));
           setUser(me);
         }
+
+        // Backend already filters bookings by user
         const bRes = await fetch(`${API_BASE}/bookings/`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (bRes.ok) {
-          const allBookings = await bRes.json();
-          const cached = sessionStorage.getItem("userData");
-          if (cached) {
-            const u = JSON.parse(cached);
-            const userEmail = (u.email || "").toLowerCase();
-            const userName = `${u.first_name || ""} ${u.last_name || ""}`.trim().toLowerCase();
-            const myBookings = allBookings.filter(b =>
-              (b.client_name || "").toLowerCase() === userName ||
-              (b.client_email || "").toLowerCase() === userEmail
-            );
-            setBookings(myBookings);
-          } else {
-            setBookings(Array.isArray(allBookings) ? allBookings : []);
-          }
+          const data = await bRes.json();
+          setBookings(Array.isArray(data) ? data : []);
         }
       } catch (e) {
         console.error(e);
@@ -73,18 +185,16 @@ export default function UserProfile({ navigate, onLogout }) {
   };
 
   const initials = user
-    ? ((user.first_name?.[0] || "") + (user.last_name?.[0] || "") || user.username?.[0] || "G").toUpperCase()
+    ? ((user.first_name?.[0] || "") + (user.last_name?.[0] || "") || "G").toUpperCase()
     : "G";
 
   const fullName = user
-    ? [user.first_name, user.last_name].filter(Boolean).join(" ") || user.username
+    ? [user.first_name, user.last_name].filter(Boolean).join(" ") || "Guest"
     : "Guest";
 
   if (loading) return (
     <div style={S.page}>
-      <style>{`
-        @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
-      `}</style>
+      <style>{`@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }`}</style>
       <nav style={S.nav}>
         <div style={{ width: "100px" }} />
         <div style={S.logo}>GRAND<span style={S.logoGold}>VELOUR</span></div>
@@ -120,6 +230,7 @@ export default function UserProfile({ navigate, onLogout }) {
         .reserve-btn-hover:hover { background: #b8965c !important; }
         .back-btn-hover:hover { color: #c9a96e !important; border-color: rgba(201,169,110,0.4) !important; }
         .logout-btn-hover:hover { color: #c97b6e !important; border-color: rgba(201,123,110,0.4) !important; }
+        .edit-input:focus { border-bottom-color: #c9a96e !important; }
       `}</style>
 
       {/* NAV */}
@@ -133,7 +244,6 @@ export default function UserProfile({ navigate, onLogout }) {
 
         {/* SIDEBAR */}
         <aside style={S.sidebar}>
-          {/* Avatar */}
           <div style={S.avatarWrap}>
             <div style={S.avatarOuter}>
               <div style={S.avatar}>{initials}</div>
@@ -144,7 +254,6 @@ export default function UserProfile({ navigate, onLogout }) {
           <h2 style={S.sidebarName}>{fullName}</h2>
           <p style={S.sidebarEmail}>{user?.email}</p>
 
-          {/* Guest ID badge */}
           <div style={S.guestBadge}>
             <span style={S.guestBadgeLabel}>GUEST</span>
             <span style={S.guestBadgeId}>GV-{String(user?.id || "0000").padStart(6, "0")}</span>
@@ -152,7 +261,6 @@ export default function UserProfile({ navigate, onLogout }) {
 
           <div style={S.divider} />
 
-          {/* Member since */}
           <div style={S.memberBlock}>
             <span style={S.memberLabel}>MEMBER SINCE</span>
             <span style={S.memberDate}>
@@ -164,10 +272,9 @@ export default function UserProfile({ navigate, onLogout }) {
 
           <div style={S.divider} />
 
-          {/* Nav tabs */}
           <nav style={S.sideNav}>
             {[
-              { id: "profile", icon: "◈", label: "Profile Details" },
+              { id: "profile",  icon: "◈", label: "Profile Details" },
               { id: "bookings", icon: "◉", label: "My Bookings" },
             ].map(t => (
               <button key={t.id} className="tab-btn"
@@ -182,70 +289,17 @@ export default function UserProfile({ navigate, onLogout }) {
 
           <div style={{ flex: 1 }} />
 
-          {/* Reserve button */}
           <button className="reserve-btn-hover" style={S.reserveBtn} onClick={() => navigate("book")}>
             Reserve a Room →
           </button>
         </aside>
 
-        {/* MAIN CONTENT */}
+        {/* MAIN */}
         <main style={S.main}>
 
           {/* ── PROFILE TAB ── */}
           {activeTab === "profile" && (
-            <div>
-              {/* Header */}
-              <div style={S.panelHeader}>
-                <div>
-                  <div style={S.panelEyebrow}>ACCOUNT</div>
-                  <h3 style={S.panelTitle}>Profile Details</h3>
-                  <p style={S.panelSub}>Your personal information on file</p>
-                </div>
-                <div style={S.statusPill}>
-                  <span style={S.statusDot} />
-                  Active Guest
-                </div>
-              </div>
-
-              {/* Info cards */}
-              <div style={S.infoGrid}>
-                {[
-                  { label: "EMAIL ADDRESS", value: user?.email, icon: "✉" },
-                  { label: "FIRST NAME", value: user?.first_name, icon: "◈" },
-                  { label: "LAST NAME", value: user?.last_name, icon: "◈" },
-                  { label: "GUEST ID", value: `GV-${String(user?.id || "0000").padStart(6, "0")}`, icon: "◉", gold: true },
-                ].map((item, i) => (
-                  <div key={i} style={S.infoCard}>
-                    <div style={S.infoCardTop}>
-                      <span style={S.infoCardIcon}>{item.icon}</span>
-                      <span style={S.infoCardLabel}>{item.label}</span>
-                    </div>
-                    <span style={{ ...S.infoCardValue, ...(item.gold ? { color: "#c9a96e", fontSize: "15px", letterSpacing: "2px", fontFamily: "'Jost', sans-serif" } : {}) }}>
-                      {item.value || <span style={{ color: "#2a2520" }}>—</span>}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Security section */}
-              <div style={{ marginTop: "36px" }}>
-                <div style={S.sectionHeader}>
-                  <div style={S.sectionLine} />
-                  <span style={S.sectionTitle}>SECURITY</span>
-                  <div style={S.sectionLine} />
-                </div>
-                <div style={S.securityCard}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-                    <div style={S.securityIcon}>🔑</div>
-                    <div>
-                      <p style={S.securityLabel}>Password</p>
-                      <p style={S.securitySub}>Last updated: unknown</p>
-                    </div>
-                  </div>
-                  <button style={S.securityBtn} onClick={() => navigate("landing")}>Change Password</button>
-                </div>
-              </div>
-            </div>
+            <ProfileEditForm user={user} onSave={(updated) => setUser(updated)} />
           )}
 
           {/* ── BOOKINGS TAB ── */}
@@ -274,18 +328,16 @@ export default function UserProfile({ navigate, onLogout }) {
                 </div>
               ) : (
                 <div style={S.tableWrap}>
-                  {/* Table header */}
                   <div style={S.tableHeader}>
                     {["BOOKING REF", "ROOM", "CHECK-IN", "CHECK-OUT", "STATUS"].map(h => (
                       <span key={h} style={S.tableHead}>{h}</span>
                     ))}
                   </div>
-                  {/* Table rows */}
                   {bookings.map((b, i) => (
                     <div key={b.id} className="booking-row"
                       style={{ ...S.tableRow, background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)", transition: "background 0.2s" }}>
                       <span style={S.bookingRef}>GV-{String(b.id).padStart(6, "0")}</span>
-                      <span style={S.tableCell}>Room {b.room}</span>
+                      <span style={S.tableCell}>Room {b.room_number || b.room}</span>
                       <span style={S.tableCell}>{b.check_in}</span>
                       <span style={S.tableCell}>{b.check_out}</span>
                       <span style={{
@@ -310,18 +362,12 @@ export default function UserProfile({ navigate, onLogout }) {
 
 const S = {
   page: { background: "#0a0908", minHeight: "100vh", color: "#e8dcc8", fontFamily: "'Cormorant Garamond', serif" },
-
-  // Nav
   nav: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 56px", borderBottom: "1px solid rgba(201,169,110,0.1)", background: "rgba(10,9,8,0.9)", backdropFilter: "blur(12px)", position: "sticky", top: 0, zIndex: 100 },
   backBtn: { background: "transparent", border: "1px solid rgba(201,169,110,0.15)", color: "#7a6f62", cursor: "pointer", fontFamily: "'Jost', sans-serif", fontSize: "11px", letterSpacing: "1.5px", padding: "8px 18px", transition: "all 0.2s", textTransform: "uppercase" },
   logo: { fontSize: "18px", fontWeight: 600, letterSpacing: "7px", color: "#e8dcc8" },
   logoGold: { color: "#c9a96e" },
   logoutBtn: { background: "transparent", border: "1px solid #1e1a16", color: "#4a3f32", cursor: "pointer", fontFamily: "'Jost', sans-serif", fontSize: "11px", letterSpacing: "2px", padding: "8px 18px", textTransform: "uppercase", transition: "all 0.2s" },
-
-  // Layout
   content: { display: "flex", minHeight: "calc(100vh - 65px)" },
-
-  // Sidebar
   sidebar: { width: "290px", flexShrink: 0, borderRight: "1px solid rgba(201,169,110,0.08)", padding: "44px 32px", display: "flex", flexDirection: "column", alignItems: "center", background: "linear-gradient(180deg, #0d0c0a 0%, #0a0908 100%)" },
   avatarWrap: { position: "relative", marginBottom: "20px" },
   avatarOuter: { width: "96px", height: "96px", borderRadius: "50%", padding: "3px", background: "linear-gradient(135deg, #c9a96e, #5a4020)", animation: "goldPulse 3s ease-in-out infinite" },
@@ -329,59 +375,39 @@ const S = {
   onlineDot: { position: "absolute", bottom: "4px", right: "4px", width: "12px", height: "12px", borderRadius: "50%", background: "#7eb87e", border: "2px solid #0a0908" },
   sidebarName: { fontSize: "22px", fontWeight: 400, color: "#e8dcc8", margin: "0 0 4px", textAlign: "center", letterSpacing: "0.5px" },
   sidebarEmail: { fontFamily: "'Jost', sans-serif", fontSize: "11px", color: "#3a3530", letterSpacing: "0.5px", margin: "0 0 16px", textAlign: "center" },
-
-  // Guest badge
   guestBadge: { display: "flex", alignItems: "center", gap: "8px", background: "rgba(201,169,110,0.07)", border: "1px solid rgba(201,169,110,0.15)", padding: "6px 14px", marginBottom: "20px" },
   guestBadgeLabel: { fontFamily: "'Jost', sans-serif", fontSize: "9px", letterSpacing: "3px", color: "#6a5f52", textTransform: "uppercase" },
   guestBadgeId: { fontFamily: "'Jost', sans-serif", fontSize: "12px", color: "#c9a96e", letterSpacing: "2px" },
-
   divider: { width: "100%", height: "1px", background: "linear-gradient(90deg, transparent, rgba(201,169,110,0.15), transparent)", margin: "4px 0 16px" },
-
-  // Member since
   memberBlock: { display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", marginBottom: "8px" },
   memberLabel: { fontFamily: "'Jost', sans-serif", fontSize: "9px", letterSpacing: "3px", color: "#3a3530", textTransform: "uppercase" },
   memberDate: { fontFamily: "'Cormorant Garamond', serif", fontSize: "16px", color: "#c9a96e", fontWeight: 300, letterSpacing: "1px" },
-
-  // Side nav
   sideNav: { width: "100%", display: "flex", flexDirection: "column", gap: "2px", marginTop: "4px" },
   sideNavBtn: { width: "100%", background: "none", border: "none", color: "#4a3f32", cursor: "pointer", fontFamily: "'Jost', sans-serif", fontSize: "11px", letterSpacing: "1.5px", padding: "11px 14px", textAlign: "left", transition: "all 0.2s", textTransform: "uppercase", display: "flex", alignItems: "center", borderRadius: "1px" },
   sideNavActive: { background: "rgba(201,169,110,0.07)", color: "#c9a96e", borderLeft: "2px solid #c9a96e", paddingLeft: "12px" },
   activeArrow: { marginLeft: "auto", fontSize: "18px", color: "#c9a96e", lineHeight: 1 },
-
   reserveBtn: { background: "#c9a96e", border: "none", color: "#0a0908", padding: "12px 20px", fontFamily: "'Jost', sans-serif", fontSize: "11px", letterSpacing: "2.5px", textTransform: "uppercase", cursor: "pointer", fontWeight: 600, width: "100%", transition: "background 0.2s", marginTop: "8px" },
-
-  // Main
   main: { flex: 1, padding: "48px 56px", background: "#0a0908" },
   panelHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "36px", paddingBottom: "28px", borderBottom: "1px solid rgba(201,169,110,0.08)" },
   panelEyebrow: { fontFamily: "'Jost', sans-serif", fontSize: "9px", letterSpacing: "4px", color: "#3a3530", textTransform: "uppercase", marginBottom: "6px" },
   panelTitle: { fontSize: "32px", fontWeight: 300, color: "#e8dcc8", margin: "0 0 6px", letterSpacing: "0.5px" },
   panelSub: { fontFamily: "'Jost', sans-serif", fontSize: "11px", color: "#3a3530", margin: 0, letterSpacing: "0.5px" },
-
-  // Status pill
   statusPill: { display: "flex", alignItems: "center", gap: "8px", background: "rgba(126,184,126,0.07)", border: "1px solid rgba(126,184,126,0.2)", padding: "8px 16px", fontFamily: "'Jost', sans-serif", fontSize: "11px", color: "#7eb87e", letterSpacing: "1.5px", textTransform: "uppercase", alignSelf: "flex-start" },
   statusDot: { width: "6px", height: "6px", borderRadius: "50%", background: "#7eb87e" },
-
-  // Info grid
   infoGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" },
   infoCard: { background: "linear-gradient(135deg, #111009, #0d0c0a)", border: "1px solid rgba(201,169,110,0.08)", padding: "20px 24px", display: "flex", flexDirection: "column", gap: "10px", transition: "border-color 0.2s" },
   infoCardTop: { display: "flex", alignItems: "center", gap: "8px" },
   infoCardIcon: { fontSize: "12px", color: "#3a3530" },
   infoCardLabel: { fontFamily: "'Jost', sans-serif", fontSize: "9px", letterSpacing: "3px", color: "#3a3530", textTransform: "uppercase" },
   infoCardValue: { fontSize: "20px", fontWeight: 300, color: "#e8dcc8", letterSpacing: "0.3px" },
-
-  // Section header with lines
   sectionHeader: { display: "flex", alignItems: "center", gap: "16px", marginBottom: "16px" },
   sectionLine: { flex: 1, height: "1px", background: "rgba(201,169,110,0.08)" },
   sectionTitle: { fontFamily: "'Jost', sans-serif", fontSize: "9px", letterSpacing: "4px", color: "#3a3530", textTransform: "uppercase", whiteSpace: "nowrap" },
-
-  // Security
   securityCard: { background: "linear-gradient(135deg, #111009, #0d0c0a)", border: "1px solid rgba(201,169,110,0.08)", padding: "22px 28px", display: "flex", justifyContent: "space-between", alignItems: "center" },
   securityIcon: { fontSize: "24px", width: "44px", height: "44px", background: "rgba(201,169,110,0.06)", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "2px" },
   securityLabel: { fontFamily: "'Jost', sans-serif", fontSize: "13px", color: "#c8bca8", margin: "0 0 3px", letterSpacing: "0.5px" },
   securitySub: { fontFamily: "'Jost', sans-serif", fontSize: "10px", color: "#3a3530", margin: 0, letterSpacing: "0.5px" },
   securityBtn: { background: "transparent", border: "1px solid rgba(201,169,110,0.2)", color: "#c9a96e", cursor: "pointer", fontFamily: "'Jost', sans-serif", fontSize: "10px", letterSpacing: "2px", padding: "9px 20px", textTransform: "uppercase", transition: "all 0.2s" },
-
-  // Bookings
   bookingCount: { display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" },
   tableWrap: { border: "1px solid rgba(201,169,110,0.08)", overflow: "hidden" },
   tableHeader: { display: "grid", gridTemplateColumns: "1.3fr 0.7fr 1fr 1fr 0.8fr", gap: "16px", padding: "12px 24px", background: "rgba(201,169,110,0.04)", borderBottom: "1px solid rgba(201,169,110,0.08)" },
@@ -390,8 +416,6 @@ const S = {
   bookingRef: { fontFamily: "'Jost', sans-serif", fontSize: "12px", color: "#c9a96e", letterSpacing: "1.5px" },
   tableCell: { fontFamily: "'Jost', sans-serif", fontSize: "12px", color: "#6a5f52", letterSpacing: "0.3px" },
   statusTag: { fontFamily: "'Jost', sans-serif", fontSize: "9px", letterSpacing: "1.5px", textTransform: "uppercase", border: "1px solid", padding: "4px 10px", display: "inline-block", textAlign: "center" },
-
-  // Empty state
   emptyState: { display: "flex", flexDirection: "column", alignItems: "center", padding: "72px 40px", border: "1px solid rgba(201,169,110,0.08)", background: "linear-gradient(135deg, #111009, #0d0c0a)" },
   emptyIcon: { fontSize: "48px", marginBottom: "20px", opacity: 0.5 },
   emptyTitle: { fontFamily: "'Cormorant Garamond', serif", fontSize: "26px", fontWeight: 300, color: "#e8dcc8", margin: "0 0 10px", letterSpacing: "0.5px" },

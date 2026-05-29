@@ -69,7 +69,7 @@ export default function UserLogin({ navigate, onLoginSuccess }) {
 
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
   const [registerForm, setRegisterForm] = useState({
-    email: "", password: "", confirmPassword: "", first_name: "", last_name: "",
+    email: "", password: "", confirmPassword: "", first_name: "", last_name: "", phone: "", address: "",  
   });
 
   const [showLoginPassword,    setShowLoginPassword]    = useState(false);
@@ -187,6 +187,8 @@ export default function UserLogin({ navigate, onLoginSuccess }) {
           password2:  registerForm.confirmPassword,
           first_name: registerForm.first_name,
           last_name:  registerForm.last_name,
+          phone: registerForm.phone,       
+          address: registerForm.address,
         }),
       });
       const data = await res.json();
@@ -427,6 +429,14 @@ export default function UserLogin({ navigate, onLoginSuccess }) {
               onChange={e => { setRegisterForm(f => ({ ...f, email: e.target.value })); setError(""); }}
               onEnter={handleRegister}
             />
+            <TextField fieldKey="phone" label="PHONE NUMBER" type="tel"
+              value={registerForm.phone} placeholder="09XX-XXX-XXXX"
+              onChange={e => { setRegisterForm(f => ({ ...f, phone: e.target.value })); setError(""); }}
+              onEnter={handleRegister} />
+            <TextField fieldKey="address" label="ADDRESS" type="text"
+              value={registerForm.address} placeholder="Your address"
+              onChange={e => { setRegisterForm(f => ({ ...f, address: e.target.value })); setError(""); }}
+              onEnter={handleRegister} />
             <PasswordField
               label="PASSWORD *"
               value={registerForm.password}
