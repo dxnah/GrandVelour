@@ -86,6 +86,7 @@ export default function UserLogin({ navigate, onLoginSuccess }) {
   const [toast, setToast]               = useState(null);
   const [registered, setRegistered]     = useState(false);
   const [notActivated, setNotActivated] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState(false);
 
   const showToast = (message, type = "success") => {
     setToast({ message, type });
@@ -101,6 +102,7 @@ export default function UserLogin({ navigate, onLoginSuccess }) {
     setMode("login");
     setError("");
     setNotActivated(false);
+    setResendSuccess(false);
     setShowLoginPassword(false);
     setShowRegisterPassword(false);
     setShowConfirmPassword(false);
@@ -110,6 +112,7 @@ export default function UserLogin({ navigate, onLoginSuccess }) {
     setMode("register");
     setError("");
     setNotActivated(false);
+    setResendSuccess(false);
     setShowLoginPassword(false);
     setShowRegisterPassword(false);
     setShowConfirmPassword(false);
@@ -120,7 +123,7 @@ export default function UserLogin({ navigate, onLoginSuccess }) {
     if (!loginForm.email || !loginForm.password) {
       setError("Please enter both email and password."); triggerShake(); return;
     }
-    setLoading(true); setError(""); setNotActivated(false);
+    setLoading(true); setError(""); setNotActivated(false); setResendSuccess(false);
     try {
       const res  = await fetch(`${API_BASE}/user/login/`, {
         method: "POST",
@@ -149,7 +152,6 @@ export default function UserLogin({ navigate, onLoginSuccess }) {
 
       } else if (res.status === 403 && data.not_activated) {
         setNotActivated(true);
-        setError("Account not activated. Please check your email or request a new link.");
         triggerShake();
       } else {
         setError(data.error || "Invalid credentials. Please try again.");
@@ -217,9 +219,10 @@ export default function UserLogin({ navigate, onLoginSuccess }) {
         body: JSON.stringify({ email: loginForm.email }),
       });
       const data = await res.json();
-      showToast(data.message || "Activation email resent!");
+      setResendSuccess(true);
       setNotActivated(false);
       setError("");
+      showToast(data.message || "Activation email sent — check your inbox!");
     } catch {
       showToast("Failed to resend. Please try again.", "error");
     } finally {
@@ -257,7 +260,7 @@ export default function UserLogin({ navigate, onLoginSuccess }) {
 
           <p style={{ ...S.hint, marginBottom: "12px" }}>Didn't receive it?</p>
           <button
-            style={{ ...S.primaryBtn, opacity: loading ? 0.7 : 1 }}
+            style={{ ...S.primaryBtn, ...S.primaryBtnActive, opacity: loading ? 0.7 : 1 }}
             onClick={async () => {
               setLoading(true);
               try {
@@ -284,7 +287,7 @@ export default function UserLogin({ navigate, onLoginSuccess }) {
           </p>
         </div>
         {toast && <Toast toast={toast} />}
-        <p style={S.footer}>© 2024 Grand Velour Hotels & Resorts</p>
+        <p style={S.footer}>© 2026 Grand Velour Hotels & Resorts</p>
       </div>
     );
   }
@@ -319,9 +322,44 @@ export default function UserLogin({ navigate, onLoginSuccess }) {
           </button>
         </div>
 
-        {error && (
+        {/* ── Generic error ── */}
+        {error && !notActivated && (
           <div style={S.errorBox}>
             <span style={{ marginRight: "8px" }}>⚠</span>{error}
+          </div>
+        )}
+
+        {/* ── Not activated banner ── */}
+        {notActivated && (
+          <div style={S.notActivatedBox}>
+            <div style={S.notActivatedHeader}>
+              <span style={{ fontSize: "18px" }}>✉</span>
+              <span style={S.notActivatedTitle}>Account not yet activated</span>
+            </div>
+            <p style={S.notActivatedBody}>
+              Your account exists but hasn't been verified yet. We sent an activation
+              link to <strong style={{ color: "#c9a96e" }}>{loginForm.email}</strong> when
+              you registered — click that link to activate your account before signing in.
+            </p>
+            <p style={S.notActivatedBody}>
+              Can't find the email? Check your spam folder, or request a new link below.
+            </p>
+            <button
+              style={{ ...S.resendBtn, marginTop: "12px", marginBottom: "0" }}
+              onClick={handleResend}
+              disabled={loading}
+            >
+              {loading ? "Sending..." : "📨  Resend activation email"}
+            </button>
+          </div>
+        )}
+
+        {/* ── Resend success banner ── */}
+        {resendSuccess && (
+          <div style={S.resendSuccessBox}>
+            <span style={{ marginRight: "8px" }}>✓</span>
+            Activation email sent! Check your inbox and click the link to activate
+            your account, then come back here to sign in.
           </div>
         )}
 
@@ -333,7 +371,12 @@ export default function UserLogin({ navigate, onLoginSuccess }) {
               type="email"
               value={loginForm.email}
               placeholder="juan@email.com"
-              onChange={e => { setLoginForm(f => ({ ...f, email: e.target.value })); setError(""); }}
+              onChange={e => {
+                setLoginForm(f => ({ ...f, email: e.target.value }));
+                setError("");
+                setNotActivated(false);
+                setResendSuccess(false);
+              }}
               onEnter={handleLogin}
             />
             <PasswordField
@@ -342,7 +385,10 @@ export default function UserLogin({ navigate, onLoginSuccess }) {
               placeholder="••••••••"
               show={showLoginPassword}
               onToggle={() => setShowLoginPassword(v => !v)}
-              onChange={e => { setLoginForm(f => ({ ...f, password: e.target.value })); setError(""); }}
+              onChange={e => {
+                setLoginForm(f => ({ ...f, password: e.target.value }));
+                setError("");
+              }}
               onEnter={handleLogin}
             />
             <button
@@ -350,12 +396,6 @@ export default function UserLogin({ navigate, onLoginSuccess }) {
               onClick={handleLogin} disabled={!loginReady || loading}>
               {loading ? "Signing In..." : "Sign In →"}
             </button>
-
-            {notActivated && (
-              <button style={S.resendBtn} onClick={handleResend} disabled={loading}>
-                {loading ? "Sending..." : "Resend Activation Email"}
-              </button>
-            )}
 
             <p style={S.hint}>Don't have an account?{" "}
               <span style={S.switchLink} onClick={switchToRegister}>Create one</span>
@@ -418,7 +458,7 @@ export default function UserLogin({ navigate, onLoginSuccess }) {
         )}
       </div>
 
-      <p style={S.footer}>© 2024 Grand Velour Hotels & Resorts</p>
+      <p style={S.footer}>© 2026 Grand Velour Hotels & Resorts</p>
     </div>
   );
 }
@@ -453,7 +493,39 @@ const S = {
   tab:         { flex:1, background:"none", border:"none", cursor:"pointer", padding:"10px 0", fontFamily:"'Jost', sans-serif", fontSize:"11px", letterSpacing:"2px", textTransform:"uppercase" },
   tabActive:   { color:"#c9a96e", borderBottom:"2px solid #c9a96e", marginBottom:"-1px" },
   tabInactive: { color:"#4a3f32" },
-  errorBox:    { background:"rgba(201,123,110,0.1)", border:"1px solid rgba(201,123,110,0.3)", color:"#c97b6e", fontFamily:"'Jost', sans-serif", fontSize:"12px", padding:"10px 14px", marginBottom:"20px", display:"flex", alignItems:"center" },
+
+  // generic error
+  errorBox: {
+    background:"rgba(201,123,110,0.1)", border:"1px solid rgba(201,123,110,0.3)",
+    color:"#c97b6e", fontFamily:"'Jost', sans-serif", fontSize:"12px",
+    padding:"10px 14px", marginBottom:"20px", display:"flex", alignItems:"center",
+  },
+
+  // not-activated block
+  notActivatedBox: {
+    background:"rgba(201,169,110,0.06)", border:"1px solid rgba(201,169,110,0.25)",
+    borderLeft:"3px solid #c9a96e", padding:"16px 18px", marginBottom:"20px",
+  },
+  notActivatedHeader: {
+    display:"flex", alignItems:"center", gap:"10px", marginBottom:"10px",
+  },
+  notActivatedTitle: {
+    fontFamily:"'Jost', sans-serif", fontSize:"12px", letterSpacing:"2px",
+    color:"#c9a96e", textTransform:"uppercase", fontWeight:500,
+  },
+  notActivatedBody: {
+    fontFamily:"'Jost', sans-serif", fontSize:"12px", color:"#8a7a68",
+    lineHeight:1.8, marginBottom:"6px",
+  },
+
+  // resend success
+  resendSuccessBox: {
+    background:"rgba(126,184,126,0.08)", border:"1px solid rgba(126,184,126,0.25)",
+    color:"#7eb87e", fontFamily:"'Jost', sans-serif", fontSize:"12px",
+    padding:"12px 16px", marginBottom:"20px", lineHeight:1.7,
+    display:"flex", alignItems:"flex-start",
+  },
+
   fieldWrap:   { marginBottom:"18px" },
   label:       { display:"block", fontFamily:"'Jost', sans-serif", fontSize:"10px", letterSpacing:"2px", color:"#6a5f52", textTransform:"uppercase", marginBottom:"8px" },
   input:       { width:"100%", background:"#151412", border:"1px solid #2a2520", color:"#e8dcc8", padding:"12px 16px", fontFamily:"'Jost', sans-serif", fontSize:"14px", boxSizing:"border-box", outline:"none", transition:"border-color 0.2s" },

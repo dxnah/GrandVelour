@@ -2,14 +2,16 @@ from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.utils.http import urlsafe_base64_encode
 from django.utils.encoding import force_bytes
+from django.contrib.auth.tokens import default_token_generator
 from django.conf import settings
 
 
 def send_activation_email(user):
     uid   = urlsafe_base64_encode(force_bytes(user.pk))
+    token = default_token_generator.make_token(user)   # ← was missing entirely
 
-    frontend_url    = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
-    activation_link = f"{frontend_url}/activate/{uid}/"
+    frontend_url    = getattr(settings, 'FRONTEND_URL')
+    activation_link = f"{frontend_url}/activate/{uid}/{token}/"  # ← token added
 
     context = {'user': user, 'activation_link': activation_link}
 
