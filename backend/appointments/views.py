@@ -8,7 +8,7 @@ from django.utils.http import urlsafe_base64_decode
 from django.utils.encoding import force_str
 from django.contrib.auth.tokens import default_token_generator
 from datetime import date
-import os
+import threading
 
 from .models import Hotel, Room, Client, Booking, User
 from .serializers import (
@@ -51,25 +51,25 @@ def _jwt(user):
         'access': str(refresh.access_token),
     }
 
+def _send_email_async(user):
+    """Send activation email in a background thread so it never blocks the request."""
+    def _send():
+        try:
+            send_activation_email(user)
+            print(f"[EMAIL SENT] Activation email sent to {user.email}")
+        except Exception as e:
+            print(f"[EMAIL ERROR] Failed to send to {user.email}: {e}")
+    thread = threading.Thread(target=_send, daemon=True)
+    thread.start()
 
-# ─── Chatbot ─────────────────────────────────────────────────────────────────
-CHATBOT_SYSTEM = """You are Velour, the elegant AI concierge of Grand Velour Hotels & Resorts — a luxury hotel brand in the Philippines. You assist guests with:
 
-- Room information (Single 1,500/night, Double 2,500/night, Suite 5,000/night, Deluxe 8,000/night)
-- Booking inquiries, check-in/check-out questions
-- Hotel amenities, facilities, and services
-- Floor map and navigation within the hotel
-- General hospitality assistance
-
-Personality: Warm, refined, elegant — like a world-class hotel concierge. Use graceful language. Keep responses concise (2-4 sentences max). Occasionally use light luxury vocabulary. Never break character. If asked something outside hotel topics, gently redirect to hotel services."""
 
 class ChatbotView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        messages = request.data.get('messages', [])
-        if not messages:
-            return Response({'error': 'No messages provided.'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'reply': 'Chatbot is handled client-side.'})
+
 
 # ─── Hotel ───────────────────────────────────────────────────────────────────
 class HotelListCreate(generics.ListCreateAPIView):
@@ -123,7 +123,6 @@ class ClientListCreate(generics.ListCreateAPIView):
     serializer_class = ClientSerializer
     permission_classes = [AllowAny]
 
-# After
 class ClientDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = Client.objects.all()
     serializer_class = ClientSerializer
@@ -233,7 +232,6 @@ class RescheduleBooking(APIView):
         if not new_check_in or not new_check_out:
             return Response({'error': 'check_in and check_out are required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        from datetime import date
         try:
             booking.check_in = date.fromisoformat(new_check_in)
             booking.check_out = date.fromisoformat(new_check_out)
@@ -244,19 +242,19 @@ class RescheduleBooking(APIView):
             return Response({'error': 'Check-out must be after check-in.'}, status=status.HTTP_400_BAD_REQUEST)
 
         booking.status = 'rescheduled'
-        booking.save()  # triggers total_price recalculation in model's save()
+        booking.save()
         return Response(BookingSerializer(booking).data)
 
 
 # ─── Admin: Manage All Users ─────────────────────────────────────────────────
 class AdminUserListView(generics.ListAPIView):
     queryset = User.objects.all()
-    serializer_class = AdminUserSerializer   # ← changed
+    serializer_class = AdminUserSerializer
     permission_classes = [IsAdminRole]
 
 class AdminUserDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = User.objects.all()
-    serializer_class = AdminUserSerializer   # ← changed
+    serializer_class = AdminUserSerializer
     permission_classes = [IsAdminRole]
 
 
@@ -265,19 +263,17 @@ class UserRegisterView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        print(f"[REGISTER REQUEST] {request.data}")  # ← debug: show what mobile sends
+        print(f"[REGISTER REQUEST] {request.data}")
         serializer = UserRegistrationSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
-            try:
-                send_activation_email(user)
-            except Exception as e:
-                print(f"[EMAIL ERROR] {e}")
+            # Send email in background — never blocks or times out the response
+            _send_email_async(user)
             return Response(
                 {'message': 'Registration successful. Please check your email to activate your account.'},
                 status=status.HTTP_201_CREATED
             )
-        print(f"[REGISTER ERROR] {serializer.errors}")  # ← debug: show validation errors
+        print(f"[REGISTER ERROR] {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -321,17 +317,14 @@ class ResendActivationView(APIView):
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
+            # Don't reveal whether the email exists
             return Response({'message': 'If that email is registered, a new link has been sent.'})
 
         if user.is_active:
             return Response({'error': 'This account is already activated.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            send_activation_email(user)
-        except Exception as e:
-            print(f'[Email Error] Could not resend activation email to {user.email}: {e}')
-            return Response({'error': 'Failed to send email. Please try again later.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+        # Send in background — never blocks or times out the response
+        _send_email_async(user)
         return Response({'message': 'Activation email resent. Please check your inbox.'}, status=status.HTTP_200_OK)
 
 
@@ -348,7 +341,7 @@ class UserLoginView(APIView):
         except User.DoesNotExist:
             return Response({'error': 'Invalid email or password.'}, status=status.HTTP_401_UNAUTHORIZED)
 
-        # ← Check is_active BEFORE authenticate()
+        # Check is_active BEFORE authenticate() to return the right error
         if not user_obj.is_active:
             return Response(
                 {
